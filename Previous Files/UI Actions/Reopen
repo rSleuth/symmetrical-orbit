@@ -1,0 +1,51 @@
+function onClick(g_form) {
+    var ga = new GlideAjax('sn_customerservice.PP_CSM_Enforcement_Flow_Ajax_Utils');
+    ga.addParam('sysparm_name', 'getReopenConfiguration');
+    ga.addParam('sysparm_tableName', g_form.getTableName());
+    ga.getXMLAnswer(function(answer) {
+        if (answer == 'Yes') {
+            g_modal.showFields({
+                title: "Select Approving Officer for Reopening",
+                fields: [{
+                    type: 'reference', // type of modal (ie text, reference, etc)
+                    name: 'u_reopen_approver', // reference field on the current record used to search
+                    label: 'Reopen Approver', // message to display above the search field
+                    mandatory: true, // sets the field to mandatory
+                    reference: 'sys_user', // table that the reference field in "name" refers to
+                    referringTable: g_form.getTableName(), // table of the current record
+                    referringRecordId: g_form.getUniqueValue(), // sys_id of the current record
+                    value: g_form.getValue('u_reopen_approver'),
+                    displayValue: g_form.getDisplayValue('u_reopen_approver')
+
+                }],
+                size: 'md'
+
+            }).then(function(fieldValues) {
+                g_form.setValue('u_reopen_approver', fieldValues.updatedFields[0].value);
+                g_form.save();
+                var gap = new GlideAjax('sn_customerservice.PP_CSM_Enforcement_Flow_Ajax_Utils');
+                gap.addParam('sysparm_name', 'executeReopenCaseApproval');
+                gap.addParam('sysparm_task_id', g_form.getUniqueValue());
+                gap.addParam('sysparm_tableName', g_form.getTableName());
+                gap.getXMLAnswer(function() {
+                    g_form.addInfoMessage(getMessage('Reopen Approval submitted, currently in progress'));
+                    g_form.setValue('u_remarks', '');
+     g_form.save();
+                });
+
+            });
+
+        } else if (answer == 'No') {
+            var gap = new GlideAjax('sn_customerservice.PP_CSM_Enforcement_Flow_Ajax_Utils');
+            gap.addParam('sysparm_name', 'executeReopenCaseApproval');
+            gap.addParam('sysparm_task_id', g_form.getUniqueValue());
+            gap.addParam('sysparm_tableName', g_form.getTableName());
+            gap.getXMLAnswer(function() {
+                g_form.addInfoMessage(getMessage('Case has been Reopened, No Approval Required.'));
+                g_form.setValue('u_remarks', '');
+                g_form.save();
+            });
+        }
+
+    });
+}

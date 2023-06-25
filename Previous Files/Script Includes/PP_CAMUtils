@@ -1,0 +1,791 @@
+var PP_CAMUtils = Class.create();
+PP_CAMUtils.prototype = {
+    initialize: function() {},
+
+
+    authValidation: function(request) {
+        var method = "POST";
+        var token = request.headers.authorization;
+        var protocol = gs.getProperty("glide.source_control.protocol.setting");
+        var host = gs.getProperty("instance_name") + "." + gs.getProperty("glide.sg.deeplink.instance_domain");
+        port = "";
+        port = port ? ':' + port : "";
+        var nonce = request.queryParams.nonce;
+        var ts = request.queryParams.ts;
+        var accountId = request.queryParams.accountid;
+        var path = request.uri;
+        var query = request.queryParams.split(',');
+        var params_query = [];
+        query.each(function(a) {
+            params_query.push(a.key + "=" + a.value);
+        });
+        params_query.sort(function(a, b) {
+            if (a.substring(0, 1).toUpperCase() < b.substring(0, 1).toUpperCase()) {
+                return -1;
+            }
+        });
+        var combinestring = protocol + "://" + host + port + "" + path + "?" + "accountid=" + accountId + "&nonce=" + nonce + "&ts=" + ts;
+        combinestring = method.toUpperCase() + "&" + combinestring.toLowerCase();
+
+        //var secretkey = gs.getProperty("pp.cam_secret_key");
+        var secretkey = "";
+        //secret_key to get from OAuth
+        var oauth_secretPP = new GlideRecord("oauth_entity");
+        oauth_secretPP.addQuery("client_id", accountId);
+        oauth_secretPP.query();
+        if (oauth_secretPP.next()) {
+            secretkey = oauth_secretPP.getValue("client_secret");
+        }
+        var ge = new GlideEncrypter();
+
+        secretkey = ge.decrypt(secretkey);
+        var MAC_ALG_3 = gs.getProperty("pp.cam_hmac_algo");
+        var mac = new GlideCertificateEncryption;
+        secretkey = GlideStringUtil.base64Encode(secretkey);
+
+        var base64string = mac.generateMac(secretkey, MAC_ALG_3, combinestring);
+        if (JSUtil.nil(token.split(" ")[1])) {
+            return "";
+        } else {
+            if (base64string == token.split(" ")[1])
+                return true;
+            else
+                return false;
+        }
+
+
+
+    },
+
+    validateNonce: function(nonce) {
+        var MAX_INT = Math.pow(2, 32) - 1;
+        if (nonce < 0) {
+            return false;
+        } else {
+            if (nonce <= MAX_INT) {
+                return true;
+            } else {
+                false;
+            }
+        }
+
+
+    },
+
+    validateTS: function(ts) {
+
+        var tsDate = new GlideDateTime();
+        tsDate.setNumericValue(ts);
+
+        var currentTime = new GlideDateTime();
+
+        if ((currentTime.getNumericValue() - tsDate.getNumericValue()) <= (gs.getProperty("pp.cam_grace_period") * 1000)) {
+            return true;
+        } else
+            return false;
+    },
+
+
+    validateRequest: function(body, type) {
+        var errors = null;
+
+        if (type == "disableEnableAPI") {
+
+            if (!body.hasOwnProperty('userId')) {
+                errors = errors || [];
+                errors.push("Please provide userId in request body");
+            } else {
+                if (typeof body.userId != "string") {
+                    errors = errors || [];
+                    errors.push("userId has to be a string");
+                }
+            }
+            if (!body.hasOwnProperty("Operations")) {
+                errors = errors || [];
+                errors.push("Please provide Operations in request body");
+            } else {
+                if (typeof body.Operations != "object") {
+                    errors = errors || [];
+                    errors.push("userId has to be an array");
+                } else {
+                    if (body.Operations.length == 1) {
+                        var operation = body.Operations[0];
+
+                        if (!operation.op) {
+                            errors = errors || [];
+                            errors.push("Please provide operation.op in request body");
+                        } else {
+                            if (typeof operation.op != "string") {
+                                errors = errors || [];
+                                errors.push("operation.op has to be a string");
+                            } else if (operation.op != "Replace") {
+                                errors = errors || [];
+                                errors.push("operation.op's value has to be \"Replace\"");
+                            }
+                        }
+
+                        if (!operation.path) {
+                            errors = errors || [];
+                            errors.push("Please provide operation.path in request body");
+                        } else {
+                            if (typeof operation.path != "string") {
+                                errors = errors || [];
+                                errors.push("operation.path has to be a string");
+                            } else if (operation.path != "active") {
+                                errors = errors || [];
+                                errors.push("operation.path's value has to be \"active\"");
+                            }
+                        }
+
+                        if (typeof operation.value == 'undefined') {
+                            errors = errors || [];
+                            errors.push("Please provide operation.value in request body");
+                        } else {
+                            if (typeof operation.value != "boolean") {
+                                errors = errors || [];
+                                errors.push("operation.value has to be a boolean");
+                            }
+                        }
+
+                    } else {
+                        errors = errors || [];
+                        errors.push("Please provide exactly 1 item in Operations");
+                    }
+
+                }
+
+            }
+            //return errors;
+        } else if (type == "getUserAPI") {
+            if (!body.hasOwnProperty('userId')) {
+                errors = errors || [];
+                errors.push("Please provide userId in request body");
+            } else {
+                if (typeof body.userId != "string") {
+                    errors = errors || [];
+                    errors.push("userId has to be a string");
+                }
+            }
+            //return errors;
+        } else if (type == "getUserListAPI") {
+            if (body.hasOwnProperty("filter")) {
+                if (typeof body.filter != "string") {
+                    errors = errors || [];
+                    errors.push("filter has to be a string");
+                }
+            }
+            if (body.hasOwnProperty("startIndex")) {
+                if (typeof body.startIndex != "number") {
+                    errors = errors || [];
+                    errors.push("startIndex has to be a number");
+                }
+            }
+            if (body.hasOwnProperty("itemsPerPage")) {
+                if (typeof body.itemsPerPage != "number") {
+                    errors = errors || [];
+                    errors.push("itemsPerPage has to be a number");
+                }
+            }
+            if (body.hasOwnProperty("ascOrderBy")) {
+                if (typeof body.ascOrderBy != "string") {
+                    errors = errors || [];
+                    errors.push("ascOrderBy has to be a string");
+                }
+            }
+            if (body.hasOwnProperty("descOrderBy")) {
+                if (typeof body.descOrderBy != "string") {
+                    errors = errors || [];
+                    errors.push("descOrderBy has to be a string");
+                }
+            }
+        } else if (type == "getGroupAPI") {
+            if (!body.hasOwnProperty('groupId')) {
+                errors = errors || [];
+                errors.push("Please provide groupId in request body");
+            } else {
+                if (typeof body.groupId != "string") {
+                    errors = errors || [];
+                    errors.push("groupId has to be a string");
+                }
+            }
+        } else if (type == "disableEnableAPIGroup") {
+            if (!body.hasOwnProperty('groupId')) {
+                errors = errors || [];
+                errors.push("Please provide groupId in request body");
+            } else {
+                if (typeof body.groupId != "string") {
+                    errors = errors || [];
+                    errors.push("groupId has to be a string");
+                }
+            }
+
+            if (!body.hasOwnProperty("Operations")) {
+                errors = errors || [];
+                errors.push("Please provide Operations in request body");
+            } else {
+                if (typeof body.Operations != "object") {
+                    errors = errors || [];
+                    errors.push("userId has to be an array");
+                } else {
+                    if (body.Operations.length == 1) {
+                        var operation = body.Operations[0];
+
+                        if (!operation.op) {
+                            errors = errors || [];
+                            errors.push("Please provide operation.op in request body");
+                        } else {
+                            if (typeof operation.op != "string") {
+                                errors = errors || [];
+                                errors.push("operation.op has to be a string");
+                            } else if (!(operation.op == "Add" || operation.op == "Remove")) {
+                                errors = errors || [];
+                                errors.push("operation.op's value has to be \"Add\" or \"Remove\"");
+                            }
+                        }
+
+                        if (!operation.path) {
+                            errors = errors || [];
+                            errors.push("Please provide operation.path in request body");
+                        } else {
+                            if (typeof operation.path != "string") {
+                                errors = errors || [];
+                                errors.push("operation.path has to be a string");
+                            } else if (operation.path != "members") {
+                                errors = errors || [];
+                                errors.push("operation.path's value has to be \"members\"");
+                            }
+                        }
+
+                        if (typeof operation.value == 'undefined') {
+                            errors = errors || [];
+                            errors.push("Please provide operation.value in request body");
+                        } else {
+                            if (typeof operation.value != "string") {
+                                errors = errors || [];
+                                errors.push("operation.value has to be a string");
+                            }
+                        }
+
+                    } else {
+                        errors = errors || [];
+                        errors.push("Please provide exactly 1 item in Operations");
+                    }
+
+                }
+
+            }
+        }
+        return errors;
+
+    },
+
+    getAndSendUserDetails: function(reqBody, api) {
+        var encodedQuery = "";
+        if (api == "getUserAPI") {
+            var responseSchema = JSON.parse(gs.getProperty("pp.cam_getuserapi"));
+            encodedQuery = "user_name=" + reqBody;
+            var responseFinal = this._buildResponse(encodedQuery, responseSchema);
+            if (!responseFinal) {
+                return false;
+            } else {
+                return responseFinal;
+            }
+        }
+        if (api == "getFilterUserAPI") {
+
+            var filter = reqBody.filter || "";
+            var filterString = filter.toString().split(" ");
+
+            var fieldName = filterString[0];
+            var operator = filterString[1];
+            var value = filterString[2];
+
+            if (fieldName == "groupName")
+                fieldName = fieldName.toString().replace(fieldName, "group.name");
+            else
+                fieldName = fieldName.toString().replace(fieldName, "group.sys_id");
+            if (operator == "eq")
+                operator = operator.toString().replace(operator, "=");
+            else if (operator == "co" || operator == "like")
+                operator = operator.toString().replace(operator, "LIKE");
+            var responseSchema = JSON.parse(gs.getProperty("pp.cam_filtereduserapi"));
+            if (filter) {
+                var str = reqBody.filter;
+                var matches = str.match(/'.*?'/g);
+                for (var i = 0; i < matches.length; i++) {
+                    value = matches[i].replace(/['']/g, '');
+                }
+
+                filter = fieldName + "" + operator + "" + value;
+                var user_arr = this.getUsersUnique(filter.toString(), reqBody.ascOrderBy, reqBody.descOrderBy);
+                encodedQuery = "sys_idIN" + user_arr;
+                return this._listFilteredUsers(encodedQuery, responseSchema, reqBody);
+            } else {
+                return this._listFilteredUsers("", responseSchema, reqBody);
+            }
+
+        }
+        if (api == "disableEnableAPI") {
+            var responseSchema = JSON.parse(gs.getProperty("pp.cam_getuserapi"));
+            var userId = reqBody.userId;
+            var value = reqBody.Operations[0].value;
+            var enableUser = gs.getProperty("pp.cam_enable_user_active");
+            if (value == true && enableUser == "false") {
+                return "invalid";
+            }
+            var userUpdated = this._updateUser("user_name=" + userId, value);
+            if (userUpdated == "updated")
+                return this._buildResponseInactive("user_name=" + userId, responseSchema);
+        }
+        if (api == "removeUserAPI") {
+            var responseSchema = JSON.parse(gs.getProperty("pp.cam_getuserapi"));
+            var userId = reqBody.userId;
+            var value = false;
+            var userUpdated = this._updateUserRemove("user_name=" + userId, value);
+            if (userUpdated == "updated") {
+                return "updated";
+            }
+        }
+    },
+
+
+    getUsersUnique: function(filter, ascOrderBy, descOrderBy) {
+        if (ascOrderBy == "groupName") {
+            ascOrderBy = "group.name";
+        } else if (ascOrderBy == "groupId") {
+            ascOrderBy = "group.sys_id";
+        }
+
+        if (descOrderBy == "groupName") {
+            descOrderBy = "group.name";
+        } else if (descOrderBy == "groupId") {
+            descOrderBy = "group.sys_id";
+        }
+        var userarr = [];
+        var returnArrUsers = new GlideRecord("sys_user_grmember");
+        returnArrUsers.addEncodedQuery(filter);
+        returnArrUsers.orderBy("group");
+        if (ascOrderBy)
+            returnArrUsers.orderBy(ascOrderBy);
+        if (descOrderBy)
+            returnArrUsers.orderByDesc(descOrderBy);
+        returnArrUsers.query();
+        while (returnArrUsers.next()) {
+            userarr.push(returnArrUsers.user.sys_id.toString());
+        }
+        return userarr;
+    },
+
+    getAndSendGroupDetails: function(reqBody, api) {
+        var encodedQuery = "";
+        if (api == "getGroupAPI") {
+            var responseSchema = JSON.parse(gs.getProperty("pp.cam_getgroupapi"));
+            encodedQuery = "sys_id=" + reqBody;
+            //return this._buildResponse(encodedQuery, responseSchema);
+            var responseFinal = this._buildGroupResponse(encodedQuery, responseSchema);
+            if (!responseFinal) {
+                return false;
+            } else {
+                return responseFinal;
+            }
+
+        }
+        if (api == "getFilterGroupAPI") {
+            var filter = reqBody.filter;
+            var filterString = filter.toString().split(" ");
+
+            var fieldName = filterString[0];
+            var operator = filterString[1];
+            var value = filterString[2];
+
+            if (fieldName == "groupName")
+                fieldName = fieldName.toString().replace(fieldName, "name");
+            else
+                fieldName = fieldName.toString().replace(fieldName, "sys_id");
+
+            if (operator == "eq")
+                operator = operator.toString().replace(operator, "=");
+            else if (operator == "co" || operator == "like")
+                operator = operator.toString().replace(operator, "LIKE");
+            //value = value.toString().replace(/['"“”]/g, ''); //myString.replace(/["]/g, '')
+            var responseSchema = JSON.parse(gs.getProperty("pp.cam_filteredgroupapi"));
+            var str = reqBody.filter;
+            if (filter) {
+                var matches = str.match(/'.*?'/g);
+                for (var i = 0; i < matches.length; i++) {
+                    value = matches[i].replace(/['']/g, '');
+                }
+
+                filter = fieldName + "" + operator + "" + value;
+
+                encodedQuery = filter;
+                return this._listFilteredGroups(encodedQuery, responseSchema, reqBody);
+            } else {
+                return this._listFilteredGroups("", responseSchema, reqBody);
+            }
+
+        }
+        if (api == "disableEnableAPIGroup") {
+            var responseSchema = JSON.parse(gs.getProperty("pp.cam_getgroupapi"));
+            var groupId = reqBody.groupId;
+            var value = reqBody.Operations[0].value;
+            var op = reqBody.Operations[0].op;
+            var userUpdated = this._updateGroup("group=" + groupId, value, op);
+            if (userUpdated == "deleted")
+                return "deleted";
+            else if (userUpdated == "inserted") {
+                return "inserted";
+            } else if (userUpdated == "invalid") {
+                return "invalid";
+            }
+        }
+
+        if (api == "removeGroupAPI") {
+            var responseSchema = JSON.parse(gs.getProperty("pp.cam_getgroupapi"));
+            // var groupId = reqBody.groupId;//groupId
+            var groupUpdated = this._removeGroup("sys_id=" + reqBody.groupId);
+            if (groupUpdated == "deactivated") {
+                return "deactivated";
+            } else if (groupUpdated == "invalid") {
+                return "invalid";
+            }
+        }
+    },
+
+
+    _removeGroup: function(query) {
+
+        var removeGroup = gs.getProperty("pp.cam-remove-group-api-allowed");
+        if (removeGroup == "true") {
+            var groupInac = new GlideRecord("sys_user_group");
+            groupInac.addEncodedQuery(query);
+            groupInac.query();
+            if (groupInac.next()) {
+                groupInac.active = false;
+                groupInac.update();
+                return "deactivated";
+            }
+        } else
+            return "invalid";
+
+    },
+
+    _buildGroupResponse: function(encodedQuery, responseSchema) {
+        var groupGr = new GlideRecord("sys_user_group");
+        groupGr.addActiveQuery();
+        groupGr.addQuery("u_bca_type", "access");
+        groupGr.addEncodedQuery(encodedQuery);
+        groupGr.query();
+        if (groupGr.next()) {
+            responseSchema.id = groupGr.sys_id.toString();
+            responseSchema.externalId = groupGr.getUniqueValue();
+            responseSchema.meta.resourceType = "Group";
+            responseSchema.meta.created = this.convertDate(new GlideDateTime(groupGr.sys_created_on));
+            responseSchema.meta.lastModified = this.convertDate(new GlideDateTime(groupGr.sys_updated_on));
+            responseSchema.displayName = groupGr.name.toString();
+            responseSchema.members = this._getUsers(groupGr.sys_id.toString());
+            responseSchema["urn:ietf:params:scim:schemas:extension:cam:2.0:Group"].groupAccessRightInfo = "Role=" + groupGr.u_role.getDisplayValue();
+
+            return responseSchema;
+        } else
+            return false;
+
+    },
+
+    _getUsers: function(groupId) {
+        var users = [];
+        var checkUsers = new GlideRecord("sys_user_grmember");
+        checkUsers.addQuery("group", groupId);
+        checkUsers.query();
+        while (checkUsers.next()) {
+            var userRec = {};
+            userRec.value = checkUsers.user.sys_id.toString();
+            userRec.$ref = gs.getProperty('glide.servlet.uri') + "/" + checkUsers.user.getRefRecord().getLink();
+            userRec.display = checkUsers.user.getDisplayValue();
+            users.push(userRec);
+        }
+
+        return users;
+    },
+
+    _updateGroup: function(groupId, value, op) {
+
+        if (op == "Remove") {
+            var groupGr = new GlideRecord("sys_user_grmember");
+            groupGr.addEncodedQuery(groupId);
+            groupGr.addQuery("user.user_name=" + value);
+            groupGr.query();
+            if (groupGr.next()) {
+                groupGr.deleteRecord();
+                return "deleted";
+            }
+        } else if (op == "Add") {
+            var operationAllowed = gs.getProperty("pp.cam_add-user-group-allowed");
+            if (operationAllowed == "true") {
+                var getUSrGr = new GlideRecord("sys_user");
+                getUSrGr.addQuery("user_name=" + value);
+                getUSrGr.query();
+                getUSrGr.next();
+
+                var userID = getUSrGr.getUniqueValue();
+                var addgroupGr = new GlideRecord("sys_user_grmember");
+                addgroupGr.initialize();
+                addgroupGr.group = groupId.split("=")[1];
+                addgroupGr.user = userID;
+                addgroupGr.insert();
+                return "inserted";
+            } else {
+                return "invalid";
+            }
+
+        }
+
+    },
+
+    _updateUser: function(userId, value) {
+
+        var userGr = new GlideRecord("sys_user");
+        userGr.addEncodedQuery(userId);
+        userGr.query();
+        userGr.next();
+        userGr.active = value;
+        userGr.update();
+        return "updated";
+
+
+    },
+
+    _updateUserRemove: function(userId, value) {
+        var sysIDUser = "";
+        var userGr = new GlideRecord("sys_user");
+        userGr.addEncodedQuery(userId);
+        userGr.query();
+        if (userGr.next()) {
+            sysIDUser = userGr.getUniqueValue();
+            userGr.active = value;
+            userGr.update();
+        }
+        var grRemove = new GlideRecord('sys_user_grmember');
+        grRemove.addQuery("user.sys_id", sysIDUser);
+        grRemove.query();
+
+        grRemove.deleteMultiple();
+
+        var grRemoveRole = new GlideRecord('sys_user_has_role');
+        grRemoveRole.addQuery("user.sys_id", sysIDUser);
+        grRemoveRole.query();
+
+        grRemoveRole.deleteMultiple();
+
+        return "updated";
+
+
+    },
+
+    _listFilteredUsers: function(query, responseSchema, reqBody) {
+        var stIndex = reqBody.startIndex;
+        var itemPP = reqBody.itemsPerPage;
+        var ascOrdrBy = reqBody.ascOrderBy;
+        var descOrdrBy = reqBody.descOrderBy;
+        var eTotalResults = 12;
+        var eStartIndex = reqBody.startIndex;
+        var eItemsPerPage = reqBody.itemsPerPage;
+
+        var countGR = new GlideRecord("sys_user");
+        countGR.addEncodedQuery(query);
+        countGR.query();
+        //eTotalResults = countGR.getRowCount();
+
+        if (ascOrdrBy == "userName") {
+            ascOrdrBy = "user_name";
+        } else if (ascOrdrBy == "userId") {
+            ascOrdrBy = "sys_id";
+        }
+
+        if (descOrdrBy == "userName") {
+            descOrdrBy = "user_name";
+        } else if (descOrdrBy == "userId") {
+            descOrdrBy = "sys_id";
+        }
+
+
+        responseSchema.startIndex = eStartIndex; //0-10
+        var multi_user = [];
+        var endIndx = eStartIndex + (eItemsPerPage - 1); //11 - 15
+        if (eTotalResults < endIndx) {
+            endIndx = eTotalResults;
+        }
+        responseSchema.itemsPerPage = eItemsPerPage;
+        responseSchema.totalResults = eTotalResults;
+
+        var userGr = new GlideRecord("sys_user");
+        userGr.addEncodedQuery(query);
+        if (ascOrdrBy) {
+            userGr.orderBy(ascOrdrBy.toString());
+        }
+        if (descOrdrBy) {
+            userGr.orderBy(descOrdrBy.toString());
+        }
+        userGr.setLimit(eTotalResults); //12
+        userGr.chooseWindow(eStartIndex - 1, endIndx, true); //0 - 10
+        userGr.query();
+        var i = 0;
+        while (userGr.next()) {
+            var schema = JSON.parse(gs.getProperty("pp.cam_getuserapi"));
+            var final_array = this._buildResponse("sys_id=" + userGr.sys_id.toString(), schema);
+            multi_user.push(final_array);
+        }
+
+        if (JSUtil.notNil(multi_user)) {
+            responseSchema.Resources = multi_user;
+            return responseSchema;
+        } else {
+            return "notfound";
+        }
+
+    },
+
+    _listFilteredGroups: function(query, responseSchema, reqBody) {
+        var ascOrdrBy = reqBody.ascOrderBy;
+        var descOrdrBy = reqBody.descOrderBy;
+        var eItemsPerPage = reqBody.itemsPerPage;
+        var eTotalResults = 12;
+        var eStartIndex = reqBody.startIndex;
+
+        responseSchema.startIndex = eStartIndex;
+
+        if (ascOrdrBy == "groupName") {
+            ascOrdrBy = "name";
+        } else if (ascOrdrBy == "groupId") {
+            ascOrdrBy = "sys_id";
+        }
+
+        if (descOrdrBy == "groupName") {
+            descOrdrBy = "name";
+        } else if (descOrdrBy == "groupId") {
+            descOrdrBy = "sys_id";
+        }
+
+        var countgroupGr = new GlideRecord("sys_user_group");
+        countgroupGr.addEncodedQuery(query);
+        countgroupGr.query();
+        //eTotalResults = countgroupGr.getRowCount();
+
+        var endIndx = eStartIndex + (eItemsPerPage - 1); //11 - 15
+        if (eTotalResults < endIndx) {
+            endIndx = eTotalResults;
+        }
+        //if(eItemsPerPage < eTotalResults)
+        responseSchema.itemsPerPage = eItemsPerPage;
+        responseSchema.totalResults = eTotalResults;
+        var multi_groups = [];
+        var groupGr = new GlideRecord("sys_user_group");
+        groupGr.addQuery("u_bca_type", "access");
+        groupGr.addEncodedQuery(query);
+        if (ascOrdrBy) {
+            groupGr.orderBy(ascOrdrBy.toString());
+        }
+        if (descOrdrBy) {
+            groupGr.orderByDesc(descOrdrBy.toString());
+        }
+
+        groupGr.setLimit(eTotalResults);
+        groupGr.chooseWindow(eStartIndex - 1, endIndx, true);
+        groupGr.query();
+        var i = 0;
+        while (groupGr.next()) {
+            var schema = JSON.parse(gs.getProperty("pp.cam_getgroupapi"));
+            var final_array = this._buildGroupResponse("sys_id=" + groupGr.sys_id.toString(), schema);
+            multi_groups.push(final_array);
+        }
+        responseSchema.Resources = multi_groups;
+        return responseSchema;
+    },
+
+    getBool: function(active) {
+        if (active) {
+            return true;
+        } else
+            return false;
+    },
+
+    _buildResponseInactive: function(query, responseSchema) {
+        var userGr = new GlideRecord("sys_user");
+        //userGr.addActiveQuery();
+        userGr.addEncodedQuery(query);
+        userGr.query();
+        if (userGr.next()) {
+            responseSchema.id = userGr.sys_id.toString();
+            responseSchema.externalId = userGr.getUniqueValue();
+            responseSchema.meta.created = this.convertDate(new GlideDateTime(userGr.sys_created_on));
+            responseSchema.meta.lastModified = this.convertDate(new GlideDateTime(userGr.sys_updated_on));
+            responseSchema.userName = userGr.user_name.toString();
+            responseSchema.displayName = userGr.name.toString();
+            responseSchema.name.formatted = userGr.name.toString();
+            responseSchema.name.familyName = userGr.last_name.toString();
+            responseSchema.name.givenName = userGr.first_name.toString();
+            responseSchema.active = this.getBool(userGr.active);
+            responseSchema.emails[0].value = userGr.email.toString();
+            responseSchema.emails[0].type = "work";
+            responseSchema.emails[0].primary = true;
+            responseSchema.profileUrl = gs.getProperty('glide.servlet.uri') + "/" + userGr.getLink();
+            responseSchema.title = userGr.title.toString();
+            responseSchema.userType = "AgencyUser";
+            responseSchema.groups = this._getGroups(userGr.sys_id.toString());
+            responseSchema["urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"].organization = "BCA";
+            responseSchema["urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"].division = userGr.getDisplayValue("department") || "testing";
+            responseSchema["urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"].department = userGr.getDisplayValue("department") || "testing";
+            responseSchema["urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"].manager.value = "";
+            responseSchema["urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"].manager.$ref = gs.getProperty('glide.servlet.uri') + "";
+            responseSchema["urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"].manager.displayName = "";
+            responseSchema["urn:ietf:params:scim:schemas:extension:cam:2.0:User"].lastLogin = this.convertDate(new GlideDateTime(userGr.last_login)) || this.convertDate(new GlideDateTime(userGr.sys_updated_on));
+            responseSchema["urn:ietf:params:scim:schemas:extension:cam:2.0:User"].lastPasswordChanged = this.convertDate(new GlideDateTime(userGr.u_password_last_change)) || this.convertDate(new GlideDateTime(userGr.sys_updated_on));
+            responseSchema["urn:ietf:params:scim:schemas:extension:cam:2.0:User"].isPrivileged = this._getPrivilegedStatus(userGr.sys_id);
+
+            return responseSchema;
+        } else
+            return false;
+    },
+
+    _getPrivilegedStatus: function(sys_id) {
+        var groupsUserPartOf = [];
+        var checkPriv = new GlideRecord("sys_user_grmember");
+        checkPriv.addQuery("user", sys_id);
+        checkPriv.query();
+        while (checkPriv.next()) {
+            groupsUserPartOf.push(checkPriv.group.sys_id.toString());
+        }
+ gs.info(groupsUserPartOf);
+  var checkSpecialGroup = new GlideRecord("sys_user_group");
+  checkSpecialGroup.addQuery("u_bca_type","access");
+  checkSpecialGroup.addQuery("sys_idIN"+groupsUserPartOf);
+  checkSpecialGroup.addQuery("u_special_access",true);
+  checkSpecialGroup.query();
+  return checkSpecialGroup.hasNext();
+    },
+
+    _buildResponse: function(query, responseSchema) {
+
+        var userGr = new GlideRecord("sys_user");
+        userGr.addActiveQuery();
+        userGr.addEncodedQuery(query);
+        userGr.query();
+        if (userGr.next()) {
+            responseSchema.id = userGr.sys_id.toString();
+            responseSchema.externalId = userGr.getUniqueValue();
+            responseSchema.meta.created = this.convertDate(new GlideDateTime(userGr.sys_created_on));
+            responseSchema.meta.lastModified = this.convertDate(new GlideDateTime(userGr.sys_updated_on));
+            responseSchema.userName = userGr.user_name.toString();
+            responseSchema.displayName = userGr.name.toString();
+            responseSchema.name.formatted = userGr.name.toString();
+            responseSchema.name.familyName = userGr.last_name.toString();
+            responseSchema.name.givenName = userGr.first_name.toString();
+            responseSchema.active = this.getBool(userGr.active);
+            responseSchema.emails[0].value = userGr.email.toString();
+            responseSchema.emails[0].type = "work";
+            responseSchema.emails[0].primary = true;
+            responseSchema.profileUrl = gs.getProperty('glide.servlet.uri') + "/" + userGr.getLink();
+            responseSchema.title = userGr.title.toString();
+            responseSchema.userType = "AgencyUser";
+            responseSchema.groups = this._getGroups(userGr.sys_id.toString());
+            responseSchema["urn:ietf:params:scim:schemas:ex...

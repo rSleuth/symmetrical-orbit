@@ -1,0 +1,119 @@
+var PP_Global_Ajax_Utils = Class.create();
+PP_Global_Ajax_Utils.prototype = Object.extendsObject(AbstractAjaxProcessor, {
+
+    validateAdminRights: function() {
+        return new global.PP_Calendar_Event_Request_Utils().validateAdminRights();
+    },
+
+    getUserCalendarSchedule: function() {
+        var reqFor = this.getParameter('sysparm_reqFor');
+        return new global.PP_Calendar_Event_Request_Utils().getUserCalendarSchedule(reqFor);
+    },
+
+    getCalendarEventInfo: function() {
+        var resultObj = {};
+        var eventSysId = this.getParameter('sysparm_eventSysId');
+        var eventInfoObj = new global.PP_Calendar_Event_Request_Utils().getCalendarEventInfo(eventSysId);
+
+        if (!gs.nil(eventInfoObj)) {
+            var daysList = eventInfoObj.days_of_week;
+            daysList = gs.nil(daysList) ? 'x' : daysList + "";
+
+            resultObj = {
+                "var_start": eventInfoObj.start + "",
+                "var_end": eventInfoObj.end + "",
+                "var_repeat_until": eventInfoObj.repeat_until_date + "",
+                "var_mon": daysList.indexOf('1') != -1,
+                "var_tue": daysList.indexOf('2') != -1,
+                "var_wed": daysList.indexOf('3') != -1,
+                "var_thu": daysList.indexOf('4') != -1,
+                "var_fri": daysList.indexOf('5') != -1,
+                "var_sat": daysList.indexOf('6') != -1,
+                "var_sun": daysList.indexOf('7') != -1,
+            };
+        }
+
+        return JSON.stringify(resultObj);
+    },
+
+    compareDates: function() {
+        var startDate = this.getParameter('sysparm_startDate');
+        var endDate = this.getParameter('sysparm_endDate');
+        return new global.PP_Global_Core_Utils().compareDates(startDate, endDate);
+    },
+
+    futureDateCheck: function() {
+        return new global.PP_Global_Core_Utils().futureDateCheck(this.getParameter('sysparm_date'));
+    },
+
+    multiDayCheck: function() {
+        var startDate = this.getParameter('sysparm_startDate');
+        var endDate = this.getParameter('sysparm_endDate');
+        return new global.PP_Global_Core_Utils().multiDayCheck(startDate, endDate);
+
+    },
+
+    checkForConflicts: function() {
+        var reqForSysId = this.getParameter('sysparm_user');
+        var startDateTime = this.getParameter('sysparm_startDateTime');
+        var endDateTime = this.getParameter('sysparm_endDateTime');
+        return new global.PP_Calendar_Event_Request_Utils().checkForConflicts(reqForSysId, startDateTime, endDateTime);
+    },
+
+    generateAuditReport: function() {
+        var encQuery = this.getParameter('sysparm_query');
+        var fileType = this.getParameter('sysparm_fileType');
+        return new global.PP_Global_Report_Utils().generateAuditReport(encQuery, fileType);
+
+    },
+
+    executeApprovalApprove: function() {
+        var taskId = this.getParameter('sysparm_task_id');
+        var approvalObj = new global.PP_Global_Core_Utils()._getActualRecord("sysapproval_approver", taskId);
+        approvalObj.state = 'approved';
+        approvalObj.update();
+        new ApprovalUserFeedback().approved(approvalObj);
+    },
+
+    executeApprovalReject: function() {
+        var taskId = this.getParameter('sysparm_task_id');
+        var approvalObj = new global.PP_Global_Core_Utils()._getActualRecord("sysapproval_approver", taskId);
+        approvalObj.state = 'rejected';
+        var comments = false;
+        if (approvalObj.comments.getJournalEntry(1) != undefined) {
+            //var lastComment = approvalObj.comments.getJournalEntry(1);
+            var index = (approvalObj.comments.getJournalEntry(1) + '').indexOf(gs.getUserDisplayName());
+            if (index > -1 && index <= 22)
+                comments = true;
+        }
+        if (!JSUtil.nil(approvalObj.comments) || comments) {
+            approvalObj.update();
+            new ApprovalUserFeedback().rejected(approvalObj);
+        } else {
+            gs.addErrorMessage(gs.getMessage("Comments are required when rejecting an approval"));
+            approvalObj.state = 'requested';
+            approvalObj.setAbortAction(true);
+        }
+    },
+
+    getsecurityquery: function(currentUser) {
+        var grsys;
+        var functionSysids = [];
+        var functionSys = '';
+        var groupGr = new GlideRecord('sys_user_group');
+        groupGr.addQuery('u_bca_type', 'access');
+  groupGr.addEncodedQuery('u_role.sys_id=53ae1fede5a9251007538ada7603de98');
+        groupGr.query();
+        while (groupGr.next()) {
+            grsys = groupGr.name;
+            if (currentUser.isMemberOf(grsys)) {
+                functionSys = groupGr.getValue('u_functions').toString();
+                functionSysids.push(functionSys);
+            }           
+        }
+
+        return functionSysids.join(",");
+    },
+
+    type: 'PP_Global_Ajax_Utils'
+});

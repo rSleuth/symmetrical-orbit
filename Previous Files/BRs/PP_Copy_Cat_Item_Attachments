@@ -1,0 +1,5 @@
+(function executeRule(current, previous /*null when async*/) {
+
+ GlideSysAttachment.copy('sc_cat_item', current.cat_item, 'sc_req_item', current.sys_id);
+
+})(current, previous);

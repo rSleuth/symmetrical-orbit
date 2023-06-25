@@ -1,0 +1,120 @@
+function onChange(control, oldValue, newValue, isLoading, isTemplate) {
+
+    var fieldsOnForm = g_form.getFieldNames();
+
+    var deadlineFields = g_scratchpad.deadlinefields;
+    var followupaction = g_form.getValue('u_follow_up_action');
+
+    if ((isLoading && newValue === '') || newValue == '') { // Hide fields on load of form or new value is empty
+
+        for (var x = 0; x < fieldsOnForm.length; x++) {
+
+            var field = fieldsOnForm[x];
+
+            if (followupaction != 3) {
+                if (field.indexOf('_tm') > -1) {
+                    g_form.clearValue(field);
+                    g_form.setMandatory(field, false);
+                    g_form.setDisplay(field, false);
+                }
+
+            } else if (followupaction == 3) {
+                if (field.indexOf('_tm') > -1 && deadlineFields.indexOf(field) == -1) {
+                    g_form.clearValue(field);
+                    g_form.setMandatory(field, false);
+                    g_form.setDisplay(field, false);
+                }
+            }
+
+        }
+
+        g_form.clearValue('u_ar_registered');
+        g_form.clearValue('u_by_hand');
+        g_form.clearValue('u_registered_mail');
+        g_form.clearValue('u_email');
+        return;
+    }
+
+    var gaGetAccountFields = new GlideAjax('sn_customerservice.PP_CSM_Ajax_Utils');
+    gaGetAccountFields.addParam('sysparm_name', 'getActionFieldsData');
+    gaGetAccountFields.addParam('sysparm_selectedletter', newValue);
+    gaGetAccountFields.getXML(getFieldData);
+
+
+    function getFieldData(response) {
+        var answer = response.responseXML.documentElement.getAttribute('answer');
+        if (answer) {
+            var arr = JSON.parse(answer);
+            var fields = JSON.parse(arr.fields);
+            if (fields) {
+                var fieldNames = [];
+                fieldNames = fields.toString().split(','); // Fields to be displayed on form
+                for (var i = 0; i < fieldNames.length; i++) {
+                    if (fieldNames[i] != 'u_annex_description_tm') {
+                        g_form.setDisplay(fieldNames[i], true);
+                        g_form.setMandatory(fieldNames[i], false);
+                    }
+                }
+                var fieldsMandatory = JSON.parse(arr.fieldsMandatory);
+                if (fieldsMandatory) {
+                    var fieldMandatoryNames = fieldsMandatory.toString().split(','); //Fields mandatory on form
+                    for (var j = 0; j < fieldMandatoryNames.length; j++) {
+                        if (fieldMandatoryNames[i] != 'u_annex_description_tm') {
+                            g_form.setMandatory(fieldMandatoryNames[j], true);
+                        }
+                    }
+                }
+
+    if(followupaction == 3){
+
+     var deadlinearr=deadlineFields.split(',');
+     for(var l=0;l<deadlinearr.length;l++){
+      g_form.setDisplay(deadlinearr[l],true);
+     }
+    }
+
+
+                if (oldValue != newValue) {
+                    var mode = [];
+                    mode = arr.methodOfDelivery.split(','); //Get Method of Delivery 
+                    if (mode.length > 0) {
+                        for (var m = 0; m < mode.length; m++) {
+                            g_form.setValue(mode[m], true);
+                        }
+                    }
+
+                    if (mode.indexOf('u_ar_registered') == -1)
+                        g_form.clearValue('u_ar_registered');
+                    if (mode.indexOf('u_by_hand') == -1)
+                        g_form.clearValue('u_by_hand');
+                    if (mode.indexOf('u_registered_mail') == -1)
+                        g_form.clearValue('u_registered_mail');
+                    if (mode.indexOf('u_email') == -1)
+                        g_form.clearValue('u_email');
+                }
+                var fieldsList = g_form.getFieldNames(); //Clear and Hide fields on form which are not part of letter template
+                for (var y = 0; y < fieldsList.length; y++) {
+                    var field = fieldsList[y];
+                    if (followupaction != 3) {
+                        if (field.indexOf('_tm') > -1 && fieldNames.indexOf(field) == -1) {
+                            g_form.clearValue(field);
+                            g_form.setMandatory(field, false);
+                            g_form.setDisplay(field, false);
+                        }
+
+                    } else if (followupaction == 3) {
+                        if (field.indexOf('_tm') > -1 && fieldNames.indexOf(field) == -1 && deadlineFields.indexOf(field) == -1) {
+
+                            g_form.clearValue(field);
+                            g_form.setMandatory(field, false);
+                            g_form.setDisplay(field, false);
+
+
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+}

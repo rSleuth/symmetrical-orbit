@@ -1,0 +1,10 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    // Add your code here
+    var date;
+    var gdt = new GlideDateTime();
+    date = gdt;
+    current.u_updated_as_of = date;
+   
+
+})(current, previous);

@@ -1,0 +1,22 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+
+    var arr = [];
+    var caseMonitoring = new GlideRecord('sn_customerservice_case_monitoring_rules');
+    caseMonitoring.addQuery('u_template', current.u_parent.u_select_letter);
+    caseMonitoring.query();
+    while (caseMonitoring.next()) {
+
+        var fieldname = caseMonitoring.getValue("u_deadline_field");
+  var actionRecObj = current.u_parent.getRefRecord();
+        if (actionRecObj.getValue(fieldname)) {
+            arr.push(caseMonitoring.u_deadline_field.toString());
+        }
+
+    }
+
+    g_scratchpad.deadlinefields = arr.toString();
+ 
+
+
+})(current, previous);

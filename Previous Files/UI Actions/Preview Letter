@@ -1,0 +1,44 @@
+function onPreviewDocument() {
+    if (g_form.getValue("u_no_letter_is_required") == "true") {
+        g_form.addInfoMessage("Cannot Preview as No Letter Required is selected.");
+        return;
+    }
+    if (g_form.getValue('u_type_of_action') == "no_further_action") {
+        g_form.addInfoMessage("Cannot Preview as No Further Action is selected.");
+        return;
+    }
+    if (g_form.getValue("u_select_letter") == "") {
+        g_form.addInfoMessage("Please select a letter before previewing.");
+        return;
+    }
+
+    previewDocument();
+
+}
+
+function previewDocument() {
+    var ga = new GlideAjax('sn_doc.PP_generateDocumentTemplateAjax');
+    ga.addParam('sysparm_name', 'generateEnforcementActionPreviewDocument');
+    ga.addParam('sysparm_task_id', g_form.getUniqueValue());
+    ga.addParam('sys_pdf_name', "Preview");
+    ga.getXMLAnswer(function(answer) {
+        if (!answer) {
+            g_form.addErrorMessage(getMessage('Unable to preview document due to an error'));
+            return;
+        }
+
+        var attachmentId = answer;
+        var dialogClass = GlideModal ? GlideModal : GlideDialogWindow;
+        var dialog = new dialogClass('sn_doc_preview_pdf');
+        dialog.setTitle(getMessage('Preview Letter'));
+        dialog.setPreference('sysparm_attachmentId', attachmentId);
+        dialog.setWidth(900);
+        dialog.render();
+        dialog.on("beforeclose", function() {
+            var ga2 = new GlideAjax("sn_doc.PP_generateDocumentTemplateAjax");
+            ga2.addParam("sysparm_name", "deleteGeneratedPreviewDocument");
+            ga2.addParam("sysparm_task_id", g_form.getUniqueValue());
+            ga2.getXMLAnswer();
+        });
+    });
+}

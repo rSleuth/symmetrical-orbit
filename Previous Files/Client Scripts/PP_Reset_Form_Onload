@@ -1,0 +1,74 @@
+function onLoad() {
+
+    var hideFieldsArr = [];
+    // var showFieldArr = [];
+
+    if (g_form.isNewRecord()) {
+        //Onload of a new record
+        //hideFieldsArr = ['u_config_type', 'u_applies_to_users', 'u_applies_to_departments', 'u_applies_to_functions', 'u_approver_users', 'u_approver_groups', 'u_table_name', 'u_approver_field', 'u_advanced_script', 'u_approver_type'];
+  hideFieldsArr = ['u_config_type', 'u_applies_to_users', 'u_applies_to_departments', 'u_applies_to_functions', 'u_approver_users', 'u_approver_groups', 'u_table_name', 'u_approver_field', 'u_advanced_script'];
+
+        for (var i = 0; i < hideFieldsArr.length; i++) {
+            g_form.setMandatory(hideFieldsArr[i], false);
+            g_form.setDisplay(hideFieldsArr[i], false);
+        }
+
+    } else {
+        //Onload of an existing record, hide fields by default
+        hideFieldsArr = ['u_applies_to_users', 'u_applies_to_departments', 'u_applies_to_functions', 'u_approver_users', 'u_approver_groups', 'u_table_name', 'u_approver_field', 'u_advanced_script'];
+        for (var k = 0; k < hideFieldsArr.length; k++) {
+            g_form.setMandatory(hideFieldsArr[k], false);
+            g_form.setDisplay(hideFieldsArr[k], false);
+        }
+
+        //Show fields based on selected options
+        var appliesTo = g_form.getValue('u_applies_to');
+        var approverType = g_form.getValue('u_approver_type');
+
+        if (appliesTo != '') {
+            if (appliesTo == 'users') {
+                g_form.setDisplay('u_applies_to_users', true);
+                g_form.setMandatory('u_applies_to_users', true);
+
+            } else if (appliesTo == 'departments') {
+                g_form.setDisplay('u_applies_to_departments', true);
+                g_form.setMandatory('u_applies_to_departments', true);
+
+            } else if (appliesTo == 'functions') {
+                g_form.setDisplay('u_applies_to_functions', true);
+                g_form.setMandatory('u_applies_to_functions', true);
+
+            } else {
+                //do nothing
+            }
+        }
+
+        if (approverType != '') {
+            if (approverType == 'users') {
+                g_form.setDisplay('u_approver_users', true);
+                g_form.setMandatory('u_approver_users', true);
+
+            } else if (approverType == 'groups') {
+                g_form.setDisplay('u_approver_groups', true);
+                g_form.setMandatory('u_approver_groups', true);
+
+            } else if (approverType == 'field') {
+                g_form.setDisplay('u_table_name', true);
+                g_form.setDisplay('u_approver_field', true);
+                g_form.setMandatory('u_approver_field', true);
+
+            } else if (approverType == 'advanced') {
+                g_form.setDisplay('u_advanced_script', true);
+                g_form.setMandatory('u_advanced_script', true);
+
+            } else {
+                //do nothing
+            }
+        }
+    }
+
+
+    // for (var j = 0; j < showFieldArr.length; j++) {
+    //     g_form.setDisplay(showFieldArr[j], false);
+    // }
+}

@@ -1,0 +1,13 @@
+(function executeRule(current, previous /*null when async*/) {
+   //Get the max approval level allowed for a case and show relevant message. Returning the current approval level to display on client side.
+    var approval_level ="";
+ var approval_config = new GlideRecord("u_approval_configuration");
+ approval_config.addEncodedQuery("u_table="+current.u_case.sys_class_name);
+ approval_config.query();
+ if(approval_config.next())
+    approval_level = approval_config.u_approval_layers;
+ if(approval_level==current.u_case.u_approvers_counter && current.isNewRecord())
+ gs.addInfoMessage("You have already added maximum level of approvals allowed for this case, hence this record would not be saved.")
+ g_scratchpad.approval_level = current.u_case.u_approvers_counter +1;
+  
+})(current, previous);

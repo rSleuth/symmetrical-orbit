@@ -1,0 +1,8 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    gs.log('PP_Prevent_Manual_Edit_toCalendar_Events: Interactive = ' + gs.isInteractive()+'\nuser = '+gs.getUserDisplayName());
+    if (gs.isInteractive()) {
+        current.setAbortAction(true);
+    }
+
+})(current, previous);

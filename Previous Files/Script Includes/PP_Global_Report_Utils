@@ -1,0 +1,206 @@
+var PP_Global_Report_Utils = Class.create();
+PP_Global_Report_Utils.prototype = {
+    initialize: function() {
+        this.TABLE_SYS_AUDIT = 'sys_audit';
+        this.TABLE_USER = 'sys_user';
+        this.TABLE_ATTACHMENT = 'sys_attachment';
+  this.ENABLE_LOG = false;
+
+        this.ppGlobalCoreUtil = new global.PP_Global_Core_Utils();
+    },
+
+    _logMessage: function(message) {
+        if (this.ENABLE_LOG) {
+            gs.log(message);
+        }
+        return;
+    },
+
+ generateAuditReport:function(encQuery, fileType){
+  return this._generateAuditReport(encQuery, fileType);
+ },
+
+    _generateAuditReport: function(encQuery, fileType) {
+        var result = '';
+
+        if (!gs.nil(encQuery)) {
+            fileType = gs.nil(fileType) ? 'csv' : fileType.toString().toLowerCase();
+            if (fileType == 'pdf') {
+                result = this._generatePDFFile(encQuery);
+
+            } else {
+                //default csv
+                result = this._generateAuditCSVFile(encQuery);
+            }
+
+            return result;
+        }
+    },
+
+    _generateAuditCSVFile: function(encQuery) {
+        var result = '';
+  var exportLimit = gs.getProperty('pp.report.audit_record_limit');
+  exportLimit = gs.nil(exportLimit) ? 500 : parseInt(exportLimit);
+        var fileName = 'PP Audit Report - ' + new GlideDateTime().getDisplayValue() + '.csv';
+        var csvHeaders = ['Table', 'Record', 'Field Name', 'New Value', 'Old Value', 'Updated by', 'Updated on' /*, 'Reason', 'Update count'*/ ];
+        var csvBody = '';
+        for (var i = 0; i < csvHeaders.length; i++) { //Build the Headers
+            csvBody = csvBody + '"' + csvHeaders[i] + '"' + ',';
+        }
+        csvBody = csvBody + "\r\n";
+
+        var auditRec = new GlideRecord(this.TABLE_SYS_AUDIT);
+        auditRec.addEncodedQuery(encQuery);
+        auditRec.orderBy('sys_created_on');
+        auditRec.query();
+        var recordCount = auditRec.getRowCount();
+
+        if (recordCount > exportLimit) {
+            result = 'Report generation failed. No of records exceeded 500.';
+
+        } else {
+            while (auditRec.next()) {
+                //setup csv file body
+                csvBody = csvBody + this._setupAuditCSVFileBody(auditRec);
+            }
+
+            //delete old attachments
+            this._deleteExistingAuditAttachments();
+
+            //generate and attach the new csv file to logged-in user's profile.
+            var fileSysId = '';
+            fileSysId = this.ppGlobalCoreUtil.generateCSVAttachmentFile(this.TABLE_USER, gs.getUserID(), fileName, csvBody);
+
+            result = gs.nil(fileSysId) ? '' : 'Click <a href="/sys_attachment.do?sys_id=' + fileSysId + '" target="_blank">here</a> to view the generated file.';
+
+        }
+
+        return result;
+    },
+
+    _setupAuditCSVFileBody: function(auditRec) {
+
+        var csvBody = '';
+
+        //setup display value for the record
+        var recDisplayval = '';
+        var rec = new GlideRecord(auditRec.getValue('tablename'));
+        if (rec.get(auditRec.getValue('documentkey'))) {
+            recDisplayval = rec.getValue('name');
+            recDisplayval = gs.nil(recDisplayval) ? rec.getValue('number') : recDisplayval;
+            recDisplayval = gs.nil(recDisplayval) ? rec.getValue('short_description') : recDisplayval;
+            if (!gs.nil(recDisplayval)) {
+                recDisplayval = recDisplayval.indexOf('"') == -1 ? recDisplayval : recDisplayval.replace(/"/g, '');
+            } else {
+                recDisplayval = '';
+            }
+        }
+        recDisplayval = gs.nil(recDisplayval) ? auditRec.getValue('documentkey') : recDisplayval;
+
+        //set newvalue
+        var newValue = auditRec.getValue('newvalue');
+        if (!gs.nil(newValue)) {
+            newValue = newValue.indexOf('"') == -1 ? newValue : newValue.replace(/"/g, '');
+        } else {
+            newValue = '';
+        }
+
+        //setup oldvalue
+        var oldValue = auditRec.getValue('oldvalue');
+        if (!gs.nil(oldValue)) {
+            oldValue = oldValue.indexOf('"') == -1 ? oldValue : oldValue.replace(/"/g, '');
+        } else {
+            oldValue = '';
+        }
+
+        //construct a row in csv file
+        csvBody =
+            '"' + auditRec.getValue('tablename') + '",' +
+            '"' + recDisplayval + '",' +
+            '"' + auditRec.getValue('fieldname') + '",' +
+            '"' + newValue + '",' +
+            '"' + oldValue + '",' +
+            '"' + auditRec.getValue('user') + '",' +
+            '"' + auditRec.getValue('sys_created_on') + '",';
+        csvBody = csvBody + "\r\n";
+
+        return csvBody;
+    },
+
+    _deleteExistingAuditAttachments: function() {
+        var attachRec = new GlideRecord(this.TABLE_ATTACHMENT);
+        attachRec.addEncodedQuery('table_name=sys_user^file_nameSTARTSWITHPP Audit Report -');
+        attachRec.orderBy('sys_created_on');
+        attachRec.setLimit(2);
+        attachRec.query();
+
+        if (attachRec.next()) {
+            var attachment = new GlideSysAttachment();
+            attachment.deleteAttachment(attachRec.getValue('sys_id'));
+        }
+        return;
+    },
+
+    //NO LONGER NEEDED- DON'T USE
+    _generatePDFFile: function(encQuery) {
+        var fileName = 'PP Audit Report - ' + new GlideDateTime().getDisplayValue();
+        //var htmlStyle = '<style>table{border:1px solid #dddddd;border-collapse: collapse;} td,th{border:1px solid #dddddd;border-collapse: collapse;padding:8px; text-align:left;}tr:nth-child(odd) {background-color: #dddddd;}</style>';
+        var htmlStyle = '<style>table{border:1px solid #dddddd;border-collapse: collapse; width:100%;} td,th{border:1px solid #dddddd;border-collapse: collapse; padding:1px;word-wrap: break-word;}tr:nth-child(even) {background-color: #dddddd;}</style>';
+        //var htmlStyle = '';
+
+        var pageProperties = {
+            "HeaderImageAttachmentId": 'attachment_sys_id',
+            "HeaderImageAlignment": 'LEFT',
+            "PageSize": 'A4',
+            "GeneratePageNumber": 'true'
+        };
+
+        var pageSetting = {
+            "PageOrientation": "LANDSCAPE",
+            "GeneratePageNumber": "true"
+
+        };
+
+        var htmlBody = htmlStyle +
+            '<table style="width:100%";>' +
+            '<tr><th width=\'50px\'><b>Table</b></th>' +
+            '<th width=\'50px\'><b>Record</b></th>' +
+            '<th width=\'50px\'><b>Field Name</b></th>' +
+            '<th width=\'50px\'><b>New value</b></th>' +
+            '<th width=\'50px\'><b>Old Value</b></th>' +
+            '<th width=\'50px\'><b>Updated by</b></th>' +
+            '<th width=\'50px\'><b>Updated On</b></th>' +
+            '<th width=\'50px\'><b>Reason</b></th>' +
+            '<th width=\'50px\'><b>Update Count</b></th></tr>';
+
+        var auditRec = new GlideRecord(this.TABLE_SYS_AUDIT);
+        auditRec.addEncodedQuery(encQuery);
+        auditRec.orderBy('sys_created_on');
+        auditRec.query();
+
+        while (auditRec.next()) {
+            htmlBody = htmlBody +
+                '<tr><td>' + auditRec.getValue('tablename') + '</td>' +
+                '<td>' + auditRec.getValue('documentkey') + '</td>' +
+                '<td>' + auditRec.getValue('fieldname') + '</td>' +
+                '<td>' + auditRec.getValue('newvalue') + '</td>' +
+                '<td>' + auditRec.getValue('oldvalue') + '</td>' +
+                '<td>' + auditRec.getValue('user') + '</td>' +
+                '<td>' + auditRec.getValue('sys_created_on') + '</td>' +
+                '<td>' + auditRec.getValue('reason') + '</td>' +
+                '<td>' + auditRec.getValue('record_checkpoint') + '</td></tr>';
+        }
+        htmlBody = htmlBody + '</table>';
+
+        //generate and download/email PDF file
+        var loggedInUser = gs.getUserID();
+        var pdfGenerator = new sn_pdfgeneratorutils.PDFGenerationAPI();
+        pdfGenerator.convertToPDFWithHeaderFooter(htmlBody, 'sys_user', loggedInUser, fileName, pageSetting);
+
+        var reportUrl = 'Click <a href="/sys_user.do?sys_id=' + loggedInUser + '" target="_blank">here</a> to view the generated file.';
+
+        return reportUrl;
+    },
+
+    type: 'PP_Global_Report_Utils'
+};

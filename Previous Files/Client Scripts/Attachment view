@@ -1,0 +1,10 @@
+function onLoad() {
+
+//openUrl("sys_attachment.do?sys_id=" + g_form.getUniqueValue());
+var url = "/sys_attachment.do?sys_id=" + g_form.getUniqueValue();
+g_form.addInfoMessage('Attachment downloaded');
+var win = top.window.open(url, '_blank');
+win.focus();
+}
+
+

@@ -1,0 +1,97 @@
+var PP_CSM_Ajax_Utils = Class.create();
+PP_CSM_Ajax_Utils.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
+
+
+    /* This Method gets the fields data which should be displayed on Action form based on letter
+           selected from Document Template Configurations Table
+    */
+
+    getActionFieldsData: function() {
+
+        var arr = {
+            "fields": [],
+            "fieldsMandatory": [],
+            "methodOfDelivery": ""
+        };
+
+        var letter = this.getParameter('sysparm_selectedletter');
+        var grActionFields = new GlideRecord('u_document_template_configuration');
+        grActionFields.addQuery('sys_id', letter);
+        grActionFields.query();
+        if (grActionFields.next()) {
+
+            arr.fields = this.getActionFieldNames(grActionFields.u_fields_applicable.toString());
+            arr.fieldsMandatory = this.getActionFieldNames(grActionFields.u_fields_mandatory.toString());
+            arr.methodOfDelivery = grActionFields.u_suggested_mode_of_mail_out.toString();
+
+        }
+        return JSON.stringify(arr);
+    },
+
+    /* This Method Returns Template Field Values and Fields data on Action Taken*/
+
+    getTemplateFieldsOnAction: function() {
+
+        var parent = this.getParameter('sysparm_parent');
+        var array = {};
+
+        var actionData = new GlideRecord('sn_customerservice_action');
+        actionData.addQuery('sys_id', parent);
+        actionData.query();
+        if (actionData.next()) {
+
+            var grActionField = new GlideRecord('u_document_template_configuration');
+            grActionField.addQuery('sys_id', actionData.u_select_letter.toString());
+            grActionField.query();
+            if (grActionField.next()) {
+
+                array.fieldsMandatory = this.getActionFieldNames(grActionField.u_fields_mandatory.toString());
+                array.fields = this.getActionFieldNames(grActionField.u_fields_applicable.toString());
+
+
+            }
+            var fieldData = JSON.parse(array.fields);
+            var elements = [];
+            elements = fieldData.toString().split(',');
+            for (var k = 0; k < elements.length; k++) {
+                array[elements[k]] = actionData.getValue(elements[k]);
+            }
+
+            array.u_email = actionData.getDisplayValue('u_email');
+            array.u_by_hand = actionData.getDisplayValue('u_by_hand');
+            array.u_ar_registered = actionData.getDisplayValue('u_ar_registered');
+            array.u_registered_mail = actionData.getDisplayValue('u_registered_mail');
+            array.u_normal_mail = actionData.getDisplayValue('u_normal_mail');
+            array.u_select_letter = actionData.u_select_letter.toString();
+   array.u_select_letter_display_name = actionData.u_select_letter.getDisplayValue().toString();
+
+        }
+
+        return JSON.stringify(array);
+
+    },
+
+    /* This Method queries the dictionary table and gets column names */
+
+    getActionFieldNames: function(fieldsList) {
+
+        var fieldsSysIdsArr = [];
+        fieldsSysIdsArr = fieldsList.split(',');
+        var fieldNamesArr = [];
+        for (var i = 0; i < fieldsSysIdsArr.length; i++) {
+            var grDictionary = new GlideRecord('sys_dictionary');
+            grDictionary.addQuery('sys_id', fieldsSysIdsArr[i]);
+            grDictionary.query();
+            if (grDictionary.next()) {
+                fieldNamesArr.push(grDictionary.element.toString());
+            }
+
+        }
+
+        return JSON.stringify(fieldNamesArr);
+    },
+
+
+
+    type: 'PP_CSM_Ajax_Utils'
+});

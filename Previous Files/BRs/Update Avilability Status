@@ -1,0 +1,14 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    var availabilitypercent = current.u_availability;
+    var availability = parseFloat(availabilitypercent);
+    if (availability > 80) {
+        current.u_availability_status = 1;
+    } else if (availability >= 50 && availability < 80) {
+        current.u_availability_status = 2;
+    } else if (availability < 50) {
+        current.u_availability_status = 3;
+    }
+
+
+})(current, previous);

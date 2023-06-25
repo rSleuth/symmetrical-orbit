@@ -1,0 +1,178 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    var userSchedule = current.schedule;
+    var operation = current.operation;
+    var startDateTime = current.u_start_date_time;
+    var endDateTime = curren.u_end_date_time;
+    var mainUser = '';
+    var mainUserSysId = '';
+    var covererSysId = '';
+    var covererName = '';
+    var covererSched = '';
+    var covererStartDate = '';
+    var covererEndDate = '';
+
+    var confgRec = new GlideRecord('agent_events');
+    configRec.addQuery('personal_schedule', userSchedule);
+    confgRec.orderByDesc('sys_created_on');
+    confgRec.setLimit(1);
+    confgRec.query();
+
+    if (confgRec.next()) {
+        mainUser = confgRec.getDisplayValue('user');
+        mainUserSysId = confgRec.getValue('user');
+    }
+
+    var covererArr = this.findCoveringOfficers(mainUserSysId, startDateTime, endDateTime);
+
+    if (covererArr.length == 0) {
+        //get coverer details from user profile - default coverer
+        var usrRec = new GlideRecord('sys_user');
+        if (usrRec.get(mainUserSysId)) {
+
+            covererSysId = usrRec.getValue('u_default_covering_officer');
+            covererName = usrRec.getDisplayValue('u_default_covering_officer');
+            covererSched = '';
+            covererStartDate = startDateTime;
+            covererEndDate = endDateTime;
+
+            //Find coverer's personal schedule
+            var confgRec = new GlideRecord('agent_events');
+            confgRec.addQuery('user', covererSysId);
+            configRec.addQuery('personal_schedule.name', covererName + ' Personal Schedule');
+            confgRec.orderByDesc('sys_created_on');
+            confgRec.setLimit(1);
+            confgRec.query();
+
+            if (confgRec1.next()) {
+                covererSched = confgRec1.getValue('personal_schedule');
+            }
+            var inputObj1 = {
+                "schedule": covererSched + '',
+                "user": covererSysId + '',
+                "sys_id": '',
+                "name": 'Cover Duty Event for ' + mainUser + '',
+                "type": 'cover_duty_events',
+                "show_as": current.show_as + '',
+                "start_date_time": covererStartDate + '',
+                "end_date_time": covererEndDate + '',
+                "all_day": current.all_day + '',
+            };
+
+            if (operation == 'insert') {
+                new global.PP_Calendar_Event_Request_Utils().createCalendarEvent(inputObj1);
+
+            } else if (operation == 'update') {
+                //new global.PP_Calendar_Event_Request_Utils().updateCalendarEvent(inputObj);
+
+            } else if (operation == 'delete') {
+                //new global.PP_Calendar_Event_Request_Utils().deleteCalendarEvent(inputObj);
+
+            } else {
+                //do nothing
+            }
+
+        } else {
+            for (var i = 0; i < covererArr.length; i++) {
+                covererObj = covererArr[i];
+                covererSysId = covererObj.sys_id;
+                covererSched = '';
+                covererName = covererObj.name;
+                covererStartDate = covererObj.start_date;
+                covererEndDate = covererObj.end_date;
+
+                //Find coverer's personal schedule
+                var confgRec1 = new GlideRecord('agent_events');
+                confgRec1.addQuery('user', covererSysId);
+                configRec1.addQuery('personal_schedule.name', covererName + ' Personal Schedule');
+                confgRec1.orderByDesc('sys_created_on');
+                confgRec1.setLimit(1);
+                confgRec1.query();
+
+                if (confgRec1.next()) {
+                    covererSched = confgRec1.getValue('personal_schedule');
+                }
+
+                var inputObj = {
+                    "schedule": covererSched + '',
+                    "user": covererSysId + '',
+                    "sys_id": '',
+                    "name": 'Cover Duty Event for ' + mainUser + '',
+                    "type": 'cover_duty_events',
+                    "show_as": current.show_as + '',
+                    "start_date_time": covererStartDate + '',
+                    "end_date_time": covererEndDate + '',
+                    "all_day": current.all_day + '',
+                    /*"u_remarks": current.u_remarks + '',
+                    "u_reason": current.u_reason + '',
+                    "repeat_type": current.repeat_type + '',
+                    "repeat_count": current.repeat_count + '',
+                    "monthly_type": current.monthly_type + '',
+                    "yearly_type": current.yearly_type + '',
+                    "repeat_until": current.repeat_until + '',
+                    "float_week": current.float_week + '',
+                    "float_day": current.float_day + '',
+                    "month": current.month + '',
+                    "var_start_display": reqRec.variables.var_start.getDisplayValue() + '',
+                    "var_end_display": reqRec.variables.var_end.getDisplayValue() + '',
+                    "var_repeat_until_display": reqRec.variables.var_repeat_until.getDisplayValue() + '',
+                    "var_multi_day_event": multiDayEvent + ''*/
+                };
+
+                if (operation == 'insert') {
+                    new global.PP_Calendar_Event_Request_Utils().createCalendarEvent(inputObj);
+
+                } else if (operation == 'update') {
+                    //new global.PP_Calendar_Event_Request_Utils().updateCalendarEvent(inputObj);
+
+                } else if (operation == 'delete') {
+                    //new global.PP_Calendar_Event_Request_Utils().deleteCalendarEvent(inputObj);
+
+                } else {
+                    //do nothing
+                }
+
+            }
+        }
+
+
+
+    }
+
+})(current, previous);
+
+function findCoveringOfficer(userSysId, startDateTime, endDateTime) {
+
+    if (!gs.nil(userSysId) && !gs.nil(startDateTime) && !gs.nil(endDateTime)) {
+        var resultArr = [];
+        var startArr = startDateTime.split(' ');
+        var startDate = startArr[0];
+        var startTime = (startArr[1] != '') ? startArr[1] : '00:00:00';
+        var endArr = endDateTime.split(' ');
+        var endDate = endArr[0];
+        var endTime = (endArr[1] != '') ? endArr[1] : '00:00:00';
+        var query = 'user=' + userSysId + '^startsBETWEENjavascript:gs.dateGenerate(\'' + startDate + '\',\'' + startTime + '\')@javascript:gs.dateGenerate(\'' + endDate + '\',\'' + endTime + '\')^ORendsBETWEENjavascript:gs.dateGenerate(\'' + startDate + '\',\'' + startTime + '\')@javascript:gs.dateGenerate(\'' + endDate + '\',\'' + endTime + '\')';
+
+        var delgtRec = new GlideRecord('sys_user_delegate');
+        delgtRec.addEncodedQuery(query);
+        delgtRec.orderBy('starts');
+        delgtRec.query();
+
+        if (delgtRec.hasNext()) {
+            //get coverer details from delegation
+            while (delgtRec.next()) {
+                var resultObj = {
+                    "sys_id": delgtRec.getValue('delegate') + '',
+                    "name": delgtRec.getDisplayValue('delegate') + '',
+                    "start_date": delgtRec.getDisplayValue('starts') + '',
+                    "end_date": delgtRec.getDisplayValue('ends') + ''
+                };
+
+                resultArr.push(resultObj);
+            }
+        }
+
+    }
+
+    return resultArr;
+}

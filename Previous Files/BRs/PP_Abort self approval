@@ -1,0 +1,38 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+
+    var ritmRec = current.sysapproval.getRefRecord();
+    var req_user = ritmRec.variables.requested_for.toString();
+
+    var approvalCheck = new GlideRecord('sysapproval_approver');
+    approvalCheck.addQuery('sys_id', current.sys_id);
+    approvalCheck.addQuery('approver', req_user);
+    approvalCheck.query();
+    if (approvalCheck.next()) {
+        current.state = 'not_required';
+        var ritm = approvalCheck.sysapproval.getRefRecord();
+        ritm.work_notes = 'Requested For cannot be the approver for the request hence moving his Approval to No Longer Required state';
+        ritm.update();
+        current.update();
+    }
+
+    var singleApprovalCheck = new GlideRecord('sysapproval_approver');
+    singleApprovalCheck.addQuery('sysapproval', current.sysapproval);
+    singleApprovalCheck.addEncodedQuery('approver!=' + req_user);
+    singleApprovalCheck.query('state=requested^sys_id!=' + current.sys_id);
+    var otherApprovalCount = singleApprovalCheck.getRowCount();
+    if (!singleApprovalCheck.next()) {
+        var ritm = new GlideRecord('sc_req_item');
+        ritm.addQuery('sys_id', current.sysapproval);
+        ritm.addEncodedQuery('cat_item=b5768005d5522550550ce470f32741c5');
+        ritm.query();
+        if (ritm.next()) {
+            ritm.state = '4';
+            var req = ritm.request.getRefRecord();
+            req.request_state = 'closed_cancelled';
+            req.update();
+            ritm.work_notes = 'Requested For cannot be the only approver for the request hence moving the Requested Item to Closed Incomplete';
+            ritm.update();
+        }
+    }
+})(current, previous);

@@ -1,0 +1,14 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+
+    var apps = [];
+    var ritm = new GlideRecord('sc_req_item');
+    ritm.addQuery('sys_id', current.sysapproval);
+    ritm.query();
+    if (ritm.next()) {
+        apps.push(ritm.variables.requested_for.toString());
+        apps.push(ritm.variables.requested_by.toString());
+    }
+    gs.eventQueue('calendar.approval.insert', current, current.approver.toString(), '');
+
+})(current, previous);

@@ -1,0 +1,11 @@
+var PP_DocumentTemplateTableChoiceScript = Class.create();
+PP_DocumentTemplateTableChoiceScript.prototype = Object.extendsObject(DocumentTemplateTableChoiceScriptSNC, {
+    initialize: function() {},
+    process: function() {
+        var taskExtensions = new GlideTableHierarchy("task").getAllExtensions(); //get all the task extended tables
+        var table_name = gs.getProperty("sn_doc.pp.document.templates.tables"); // system property to get our custom table name
+        taskExtensions.push(table_name);
+        return new global.ArrayUtil().unique(taskExtensions); //returning array of table names
+    },
+    type: 'PP_DocumentTemplateTableChoiceScript'
+});

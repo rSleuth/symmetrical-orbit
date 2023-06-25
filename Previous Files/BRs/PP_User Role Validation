@@ -1,0 +1,11 @@
+(function executeRule(current, previous /*null when async*/) {
+
+ // Add your code here
+
+ var result = new global.PP_Global_Core_Utils().userRoleValidation(current.role, current.current.group.u_role);
+ if(result == 'false'){
+  current.setAbortAction(true);
+  gs.addErrorMessage('Designation of the user is not valid for the role.')
+ }
+
+})(current, previous);

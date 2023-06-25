@@ -1,0 +1,8 @@
+(function executeRule(current, previous /*null when async*/) {
+
+ // Add your code here
+
+ g_scratchpad.issuance=previous.getValue('u_issuance_date').toString();
+ 
+
+})(current, previous);

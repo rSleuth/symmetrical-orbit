@@ -1,0 +1,7 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    gs.addInfoMessage('current.u_approval_config.u_table = ' + current.u_approval_config.u_table);
+    g_scratchpad.approval_config_table = current.u_approval_config.u_table;
+    gs.addInfoMessage('g_scratchpad.approval_config_table = ' + g_scratchpad.approval_config_table);
+
+})(current, previous);

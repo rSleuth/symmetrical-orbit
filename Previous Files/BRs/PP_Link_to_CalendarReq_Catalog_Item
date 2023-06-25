@@ -1,0 +1,7 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    var url = 'https://' + gs.getProperty('instance_name') + '.service-now.com/swp?id=sc_cat_item&sys_id=' + gs.getProperty('pp.catitem.calendar_event_request');
+    g_scratchpad.calendarEventRequestUrl = '<a href="' + url + '" target="_blank"><b>here</b></a>';
+
+
+})(current, previous);

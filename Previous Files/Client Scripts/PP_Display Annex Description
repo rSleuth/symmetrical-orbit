@@ -1,0 +1,11 @@
+function onChange(control, oldValue, newValue, isLoading, isTemplate) {
+
+    //Show Annex Description when supporting document is not empty
+    if (isLoading)
+        return;
+    if (((g_form.getValue("u_select_letter") == "6998fc3e18f1e110e3ea6e7b95af1d88") || (g_form.getValue('u_select_letter') == "b759b87e18f1e110e3ea6e7b95af1daa") || (g_form.getValue('u_select_letter') == "de4df4721835e110e3ea6e7b95af1de5")) && g_form.getValue("u_upload_supporting_document") != "")
+        g_form.setDisplay('u_annex_description_tm', true);
+    else {
+        g_form.setDisplay('u_annex_description_tm', false);
+    }
+}

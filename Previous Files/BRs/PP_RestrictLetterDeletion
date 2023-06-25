@@ -1,0 +1,16 @@
+(function executeRule(current, previous /*null when async*/ ) {
+ /*
+The below script restricts the deletion of system generated letter if the action is in pending action from offender or closed state.
+ */
+    var actionRec = new GlideRecord("sn_customerservice_action");
+    if (actionRec.get(current.getValue("table_sys_id")));
+    var functionName = actionRec.u_enforcement_case.u_function.u_function_code.toString();
+ var letterName = functionName + "-ENF-";
+ if(current.file_name.indexOf(letterName)>-1 && (actionRec.u_action_status=="pending_action_from_offender" || actionRec.u_action_status=="closed")  )
+ {
+  current.setAbortAction(true);
+  gs.addErrorMessage("Cannot delete the system generated letter as the action has already been mark delivered.");
+ }
+
+
+})(current, previous);

@@ -1,0 +1,7 @@
+function onLoad() {
+
+ //Hide Fields on form on Load
+    g_form.setDisplay('u_parent', false);
+    g_form.setDisplay('u_action', false);
+
+}

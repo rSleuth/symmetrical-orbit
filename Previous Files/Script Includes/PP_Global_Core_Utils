@@ -1,0 +1,458 @@
+var PP_Global_Core_Utils = Class.create();
+PP_Global_Core_Utils.prototype = {
+        initialize: function() {
+            this.TABLE_USER = "sys_user";
+            this.TABLE_GROUP_MEMBER = "sys_user_grmember";
+            this.TABLE_DEPARTMENT = 'cmn_department';
+            this.ENABLE_LOG = false;
+        },
+
+        logMessage: function(message) {
+            if (this.ENABLE_LOG) {
+                gs.log(message);
+            }
+            return;
+        },
+
+        getGroupMembers: function(groupSysId) {
+            return this._getGroupMembers(groupSysId);
+        },
+        addGroupMember: function(groupSysId, userSysId) {
+            return this._addGroupMember(groupSysId, userSysId);
+        },
+        removeGroupMember: function(groupSysId, userSysId) {
+            return this._removeGroupMember(groupSysId, userSysId);
+        },
+        getUserDetails: function(userSysId) {
+            return this._getUserDetails(userSysId);
+        },
+
+        futureDateCheck: function(inputDate) {
+            return this._futureDateCheck(inputDate);
+        },
+        compareDates: function(inputDate1, inputDate2) {
+            return this._compareDates(inputDate1, inputDate2);
+        },
+        convertDisplayDateToInternalDate: function(inputDate) {
+            return this._convertDisplayDateToInternalDate(inputDate);
+        },
+        getDateDiff: function(inputDate1, inputDate2, resultType) {
+            return this._getDateDiff(inputDate1, inputDate2, resultType);
+        },
+        multiDayCheck: function(inputDate1, inputDate2) {
+            return this._multiDayCheck(inputDate1, inputDate2);
+        },
+
+        generateCSVAttachmentFile: function(tableName, recordSysId, fileName, csvBody) {
+            return this._generateCSVAttachmentFile(tableName, recordSysId, fileName, csvBody);
+        },
+        userRoleValidation: function(role, user) {
+            return this._userRoleValidation(role, user);
+        },
+        updateDirectorsGrpMembership: function() {
+            return this._updateDirectorsGrpMembership();
+        },
+        updateDeputyDirectorsGrpMembership: function() {
+            return this._updateDeputyDirectorsGrpMembership();
+        },
+        updateGroupDirectorsGrpMembership: function() {
+            return this._updateGroupDirectorsGrpMembership();
+        },
+
+        _updateDirectorsGrpMembership: function() {
+
+            //Get current list of Director group members
+            var groupSysId = gs.getProperty('pp.group.directors');
+            var currentMembers = this._getGroupMembers(groupSysId);
+            var currentMembersList = gs.nil(currentMembers) ? [] : currentMembers.split(',');
+
+            //Get updated list of users who are currently set as Directors across various Departments
+            var latestDirectors = '';
+            var grpRec = new GlideRecord(this.TABLE_DEPARTMENT);
+            grpRec.addEncodedQuery('u_type=department^u_directorISNOTEMPTY^parent.parent=c8e6cc06e5e9651007538ada7603de73');
+            grpRec.query();
+
+            while (grpRec.next()) {
+                latestDirectors = gs.nil(latestDirectors) ? grpRec.getValue('u_director') : latestDirectors + ',' + grpRec.getValue('u_director');
+            }
+
+            var latestDirectorsList = gs.nil(latestDirectors) ? [] : latestDirectors.split(',');
+            var arrayUtil = new ArrayUtil();
+            var addMembersList = arrayUtil.diff(latestDirectorsList, currentMembersList);
+            var removeMembersList = arrayUtil.diff(currentMembersList, latestDirectorsList);
+
+            for (var i = 0; i < addMembersList.length; i++) {
+                this._addGroupMember(groupSysId, addMembersList[i]);
+            }
+
+            for (var j = 0; j < removeMembersList.length; j++) {
+                this._removeGroupMember(groupSysId, removeMembersList[j]);
+            }
+
+            return;
+
+        },
+
+        _updateDeputyDirectorsGrpMembership: function() {
+
+            //Get current list of Deputy Director group members
+            var groupSysId = gs.getProperty('pp.group.deputy_directors');
+            var currentMembers = this._getGroupMembers(groupSysId);
+            var currentMembersList = gs.nil(currentMembers) ? [] : currentMembers.split(',');
+
+            //Get updated list of users who are currently set as Directors across various Departments
+            var latestDeputyDirectors = '';
+            var grpRec = new GlideRecord(this.TABLE_DEPARTMENT);
+            grpRec.addEncodedQuery('u_type=department^u_deputy_directorISNOTEMPTY^parent.parent=c8e6cc06e5e9651007538ada7603de73');
+            grpRec.query();
+
+            while (grpRec.next()) {
+                latestDeputyDirectors = gs.nil(latestDeputyDirectors) ? grpRec.getValue('u_deputy_director') : latestDeputyDirectors + ',' + grpRec.getValue('u_deputy_director');
+            }
+
+            var latestDeputyDirectorsList = gs.nil(latestDeputyDirectors) ? [] : latestDeputyDirectors.split(',');
+            var arrayUtil = new ArrayUtil();
+            var addMembersList = arrayUtil.diff(latestDeputyDirectorsList, currentMembersList);
+            var removeMembersList = arrayUtil.diff(currentMembersList, latestDeputyDirectorsList);
+
+            for (var i = 0; i < addMembersList.length; i++) {
+                this._addGroupMember(groupSysId, addMembersList[i]);
+            }
+
+            for (var j = 0; j < removeMembersList.length; j++) {
+                this._removeGroupMember(groupSysId, removeMembersList[j]);
+            }
+
+            return;
+
+        },
+
+        _updateGroupDirectorsGrpMembership: function() {
+
+            //Get current list of Deputy Director group members
+            var groupSysId = gs.getProperty('pp.group.group_directors');
+            var currentMembers = this._getGroupMembers(groupSysId);
+            var currentMembersList = gs.nil(currentMembers) ? [] : currentMembers.split(',');
+
+            //Get updated list of users who are currently set as Directors across various Departments
+            var latestGroupDirectors = '';
+            var grpRec = new GlideRecord(this.TABLE_DEPARTMENT);
+            grpRec.addEncodedQuery('u_type=group^u_group_directorISNOTEMPTY^parent=c8e6cc06e5e9651007538ada7603de73');
+            grpRec.query();
+
+            while (grpRec.next()) {
+                latestGroupDirectors = gs.nil(latestGroupDirectors) ? grpRec.getValue('u_group_director') : latestGroupDirectors + ',' + grpRec.getValue('u_group_director');
+            }
+
+            var latestGroupDirectorsList = gs.nil(latestGroupDirectors) ? [] : latestGroupDirectors.split(',');
+            var arrayUtil = new ArrayUtil();
+            var addMembersList = arrayUtil.diff(latestGroupDirectorsList, currentMembersList);
+            var removeMembersList = arrayUtil.diff(currentMembersList, latestGroupDirectorsList);
+
+            for (var i = 0; i < addMembersList.length; i++) {
+                this._addGroupMember(groupSysId, addMembersList[i]);
+            }
+
+            for (var j = 0; j < removeMembersList.length; j++) {
+                this._removeGroupMember(groupSysId, removeMembersList[j]);
+            }
+
+            return;
+        },
+
+
+        _getGroupMembers: function(groupSysId) {
+            var result = '';
+            var grpMemRec = new GlideRecord(this.TABLE_GROUP_MEMBER);
+            grpMemRec.addQuery('group', groupSysId);
+            grpMemRec.query();
+
+            while (grpMemRec.next()) {
+                result = gs.nil(result) ? grpMemRec.getValue('user') : result + ',' + grpMemRec.getValue('user');
+            }
+
+            return result;
+        },
+
+        _addGroupMember: function(groupSysId, userSysId) { //gs.log('addGroupMember 1');
+            var grpMemRec = new GlideRecord(this.TABLE_GROUP_MEMBER);
+            grpMemRec.initialize();
+            grpMemRec.setValue('group', groupSysId);
+            grpMemRec.setValue('user', userSysId);
+            grpMemRec.insert();
+
+            return;
+        },
+
+        _removeGroupMember: function(groupSysId, userSysId) { //gs.log('removeGroupMember 1');
+            var grpMemRec = new GlideRecord(this.TABLE_GROUP_MEMBER);
+            grpMemRec.addQuery('group', groupSysId);
+            grpMemRec.addQuery('user', userSysId);
+            grpMemRec.query();
+            //grpMemRec.deleteRecord();
+            grpMemRec.deleteMultiple();
+
+            return;
+        },
+
+        _getUserDetails: function(userSysId) {
+            var result = '';
+            var usrRec = new GlideRecord(this.TABLE_USER);
+            if (usrRec.get(userSysId)) {
+                result = usrRec;
+            }
+
+            return result;
+        },
+
+        _userRoleValidation: function(role, user) {
+            var designationArr = [];
+            var roleCheck = new GlideRecord('u_roles_to_rank_mapping');
+            roleCheck.addQuery('u_role', role);
+            roleCheck.addEncodedQuery('u_designationISNOTEMPTY');
+            roleCheck.query();
+            while (roleCheck.next()) {
+                designationArr.push(roleCheck.u_designation.toString());
+            }
+
+            if (designationArr.length > 0) {
+                var desCheck = new GlideRecord('sys_user');
+                desCheck.addQuery('sys_id', user);
+                desCheck.addEncodedQuery('u_designation.sys_idIN' + designationArr.toString());
+                desCheck.query();
+                if (desCheck.next()) {
+                    return 'true';
+                } else {
+                    return 'false';
+                }
+            } else {
+                return 'true';
+            }
+        },
+
+        _futureDateCheck: function(inputDate) {
+            var gdt = new GlideDateTime();
+            return this.compareDates(inputDate, gdt.getDisplayValue());
+        },
+
+        _compareDates: function(inputDate1, inputDate2) {
+            var result = false;
+            var inputDate1Internal = this.convertDisplayDateToInternalDate(inputDate1);
+            var inputDate2Internal = this.convertDisplayDateToInternalDate(inputDate2);
+
+            if (inputDate1Internal > inputDate2Internal) {
+                result = true;
+            }
+
+            return result;
+        },
+
+        _convertDisplayDateToInternalDate: function(inputDate) {
+            var gdt1 = new GlideDateTime();
+            gdt1.setDisplayValue(inputDate);
+
+            return gdt1.getValue();
+        },
+
+        _getDateDiff: function(inputDate1, inputDate2, resultType) {
+            var result = 0;
+
+            var gdt1 = new GlideDateTime();
+            gdt1.setDisplayValue(inputDate1);
+
+            var gdt2 = new GlideDateTime();
+            gdt2.setDisplayValue(inputDate2);
+
+            var diffSeconds = gs.dateDiff(gdt1.getDisplayValue(), gdt2.getDisplayValue(), true);
+            diffSeconds = gs.nil(diffSeconds) ? 0 : diffSeconds;
+
+            if (diffSeconds > 0) {
+                if (resultType == 'minutes') {
+                    result = diffSeconds / 60;
+                } else if (resultType == 'hours') {
+                    result = diffSeconds / (24 * 60);
+                } else if (resultType == 'days') {
+                    result = diffSeconds / (24 * 3600);
+                } else {
+                    result = diffSeconds;
+                }
+            } else {
+                result = diffSeconds;
+            }
+
+            return result;
+        },
+
+        _multiDayCheck: function(inputDate1, inputDate2) {
+            var result = false;
+
+            var gdt1 = new GlideDateTime();
+            gdt1.setDisplayValue(inputDate1);
+            //var date1 = gdt1.getDate();
+            var date1 = gdt1.getDisplayValue().split(' ')[0];
+            date1 = date1 + '';
+
+            var gdt2 = new GlideDateTime();
+            gdt2.setDisplayValue(inputDate2);
+            //var date2 = gdt2.getDate();
+            var date2 = gdt2.getDisplayValue().split(' ')[0];
+            date2 = date2 + '';
+
+            //gs.log('multiDayCheck date1 = ' + date1 + ':::date2 = ' + date2);
+            if (date1 != date2) {
+                result = true;
+            }
+
+            return result;
+        },
+
+        pp_runScript: function(inputparam) {
+            //gs.log('PP_Global_Core_Utils : pp_runScript 1 inputparam = '+inputparam);
+
+            var scriptCode = GlideEvaluator.evaluateString(inputparam);
+            //gs.log('PP_Global_Core_Utils : pp_runScript 2 scriptCode = ' + scriptCode);
+
+            var result = GlideEvaluator.evaluateString(scriptCode);
+            //gs.log('PP_Global_Core_Utils : pp_runScript 3 result = ' + result);
+
+            return result;
+        },
+
+        _generateCSVAttachmentFile: function(tableName, recordSysId, fileName, csvBody) {
+            var fileSysId = '';
+            var usrec = new GlideRecord(tableName);
+            usrec.addQuery("sys_id", recordSysId);
+            usrec.query();
+            if (usrec.next()) {
+                var grAttachment = new GlideSysAttachment();
+                fileSysId = grAttachment.write(usrec, fileName, 'application/csv', csvBody);
+            }
+
+            return fileSysId;
+        },
+
+        _getActualRecord: function(tableName, recordSysId) {
+            var refRecord = new GlideRecord(tableName);
+            refRecord.addQuery("sys_id", recordSysId);
+            refRecord.query();
+            if (refRecord.next()) {
+                return refRecord;
+            }
+        },
+
+        //This funtion is to reset the counter every year for all case_types
+        resetCounter: function() {
+            var caseTypes = gs.getProperty('pp.sn_customerservice_case_types').toString();
+            var arr = caseTypes.split(',');
+            for (var i = 0; i < arr.length; i++) {
+                var numGr = new GlideRecord('sys_number_counter');
+                numGr.addQuery('table', arr[i]);
+                numGr.query();
+                if (numGr.next()) {
+                    numGr.number = 0;
+                    numGr.update();
+                }
+
+            }
+        },
+
+        /*This function returns the 6 digit running sequence number and 
+maintains a counter in a system property*/
+
+        counterUpdate: function() {
+            var seqCounter;
+            var counter = gs.getProperty('pp_letter_generation_counter');
+            if (counter == 1000000)
+                counter = 1;
+            var sysPropUp = parseInt(counter) + 1;
+            sysPropUp = sysPropUp.toString().replace('.0', '');
+            /*Using gliderecord to update System Property because setproperty is not allowing to update value as this function is being called 
+            from scripts triggered from UI actions present in different scopes, and only admin has write access to the properties. 
+            */
+            var propGr = new GlideRecord('sys_properties');
+            propGr.addQuery('name', 'pp_letter_generation_counter');
+            propGr.query();
+            if (propGr.next()) {
+                propGr.value = sysPropUp;
+                propGr.update();
+            }
+            //gs.setProperty('pp_letter_generation_counter', sysPropUp);
+            var sequence = ['00000', '0000', '000', '00', '0', ''];
+            var count = [10, 100, 1000, 10000, 100000, 1000000];
+            for (i = 0; i <= 5; i++) {
+                if (counter < count[i]) {
+                    seqCounter = sequence[i] + counter;
+                    break;
+                }
+            }
+            return seqCounter;
+
+        },
+
+        getReopenConfig: function(tableName) {
+            var reopen = 'No';
+            var approval_group = new GlideRecord("u_approval_configuration");
+            approval_group.addEncodedQuery("u_table=" + tableName);
+            approval_group.query();
+            if (approval_group.next()) {
+                var reopenconfig = approval_group.getValue("u_reopen_approval");
+                if (reopenconfig == 1 || reopenconfig == true)
+                    reopen = 'Yes';
+            }
+            return reopen;
+        },
+        getDate: function(date, time) {
+
+            return this._getDate(date, time);
+
+
+
+
+        },
+
+        _getDate: function(date, time) {
+            var gdt = new GlideDateTime(date);
+            var gdtDate = gdt.getDate();
+            gdtDateTime = gdtDate + time;
+            var gdr = new GlideDateTime(gdtDateTime);
+            var start = gdr.getDisplayValueInternal();
+            return start;
+        },
+
+        checkUserPartOfGroup: function(groupSysId, userId) {
+            return this._checkUserPartOfGroup(groupSysId, userId);
+        },
+
+        _checkUserPartOfGroup: function(groupSysId, userId) {
+            var getGroupMembers = this._getGroupMembers(groupSysId);
+            if (!gs.nil(userId)) {
+                if (getGroupMembers.indexOf(userId) > -1)
+                    return true;
+                else
+                    return false;
+            }
+
+
+        },
+        visibiltyOfApproveRejectButton: function(curObj) {
+            var loggedInUSer = gs.getUserID();
+            var flag = false;
+            var gr = new GlideRecord('sys_user_delegate');
+            gr.addQuery('user', curObj.approver);
+            gr.addQuery('delegate', loggedInUSer);
+            gr.addQuery('ends>=javascript:gs.beginningOfToday()^starts<=javascript:gs.endOfToday()');
+            gr.query();
+            if (gr.next()) {
+                flag = true;
+            }
+            if ((flag == true || current.approver == loggedInUSer) && current.state == 'requested'){
+    return true;
+   }
+   else{
+    return false;
+   }
+
+
+            },
+            type: 'PP_Global_Core_Utils'
+        };

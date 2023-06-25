@@ -1,0 +1,71 @@
+function onChange(control, oldValue, newValue, isLoading, isTemplate) {
+ 
+    if (isLoading && newValue === '' || newValue=='') {
+        g_form.setMandatory('u_indicate_course_of_action', false);
+        g_form.clearValue('u_indicate_course_of_action');
+        g_form.setDisplay('u_indicate_course_of_action', false);
+        g_form.setMandatory('u_reason_of_appeal', false);
+        g_form.clearValue('u_reason_of_appeal');
+        g_form.setDisplay('u_reason_of_appeal', false);
+        g_form.setMandatory('u_reason_of_extension_of_time', false);
+        g_form.clearValue('u_reason_of_extension_of_time');
+        g_form.setDisplay('u_reason_of_extension_of_time', false);
+        g_form.setMandatory('u_indicate_course_of_action_reminder', false);
+        g_form.clearValue('u_indicate_course_of_action_reminder');
+        g_form.setDisplay('u_indicate_course_of_action_reminder', false);
+
+        return;
+    }
+
+    //Display Fields Based on Follow Up Action Field
+
+    if ((newValue == 1 || newValue == 3)) {
+
+        g_form.setMandatory('u_indicate_course_of_action', true);
+        g_form.setDisplay('u_indicate_course_of_action', true);
+
+    } else {
+
+        g_form.setMandatory('u_indicate_course_of_action', false);
+        g_form.clearValue('u_indicate_course_of_action');
+        g_form.setDisplay('u_indicate_course_of_action', false);
+    }
+    if (newValue == 1) {
+
+        g_form.setMandatory('u_reason_of_appeal', true);
+        g_form.setDisplay('u_reason_of_appeal', true);
+
+    } else {
+
+        g_form.setMandatory('u_reason_of_appeal', false);
+        g_form.clearValue('u_reason_of_appeal');
+        g_form.setDisplay('u_reason_of_appeal', false);
+    }
+    if (newValue == 3) {
+
+        g_form.setMandatory('u_reason_of_extension_of_time', true);
+        g_form.setDisplay('u_reason_of_extension_of_time', true);
+
+    } else {
+
+        g_form.setMandatory('u_reason_of_extension_of_time', false);
+        g_form.clearValue('u_reason_of_extension_of_time');
+        g_form.setDisplay('u_reason_of_extension_of_time', false);
+
+    }
+
+    if (newValue == 4) {
+
+        g_form.setMandatory('u_indicate_course_of_action_reminder', true);
+        g_form.setDisplay('u_indicate_course_of_action_reminder', true);
+
+
+    } else {
+
+        g_form.setMandatory('u_indicate_course_of_action_reminder', false);
+        g_form.clearValue('u_indicate_course_of_action_reminder');
+        g_form.setDisplay('u_indicate_course_of_action_reminder', false);
+    }
+
+ 
+}

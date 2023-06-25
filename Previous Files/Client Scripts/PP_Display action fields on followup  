@@ -1,0 +1,80 @@
+function onChange(control, oldValue, newValue, isLoading, isTemplate) {
+
+
+    if (newValue == '' || newValue != 5) { //5 is the Amendment letter value
+
+        g_form.setReadOnly('u_select_letter', false);
+
+        // if (oldValue && oldValue != newValue && oldValue == 5)
+        //     g_form.clearValue('u_select_letter');
+
+    }
+
+    if (newValue != oldValue)
+        g_form.clearValue('u_select_letter');
+    //Display action fields when follow up action is amendment letter
+    if (newValue == 5) {
+        g_form.setReadOnly('u_select_letter', true);
+    }
+    if (newValue == 5 && !isLoading) {
+
+
+        var gaGetAccountFields = new GlideAjax('sn_customerservice.PP_CSM_Ajax_Utils');
+        gaGetAccountFields.addParam('sysparm_name', 'getTemplateFieldsOnAction');
+        gaGetAccountFields.addParam('sysparm_parent', g_form.getValue('u_parent'));
+        gaGetAccountFields.getXML(getFieldData);
+
+    }
+
+    function getFieldData(response) {
+
+        var answer = response.responseXML.documentElement.getAttribute('answer');
+        if (answer) {
+            var arr = JSON.parse(answer);
+             
+            g_form.setValue('u_select_letter', arr.u_select_letter.toString(), arr.u_select_letter_display_name);
+            g_form.setValue('u_email', arr.u_email);
+            g_form.setValue('u_by_hand', arr.u_by_hand);
+            g_form.setValue('u_ar_registered', arr.u_ar_registered);
+            g_form.setValue('u_registered_mail', arr.u_registered_mail);
+            g_form.setValue('u_normal_mail', arr.u_normal_mail);
+            g_form.setReadOnly('u_select_letter', true);
+
+            var fields = JSON.parse(arr.fields);
+            if (fields) {
+                var fieldNames = [];
+                fieldNames = fields.toString().split(','); // Fields to be displayed on form
+                for (var i = 0; i < fieldNames.length; i++) {
+                    g_form.setDisplay(fieldNames[i], true);
+                    g_form.setMandatory(fieldNames[i], false);
+                    g_form.setValue(fieldNames[i], arr[fieldNames[i]]);
+                }
+                var fieldsMandatory = JSON.parse(arr.fieldsMandatory);
+                if (fieldsMandatory) {
+                    var fieldMandatoryNames = fieldsMandatory.toString().split(','); //Fields mandatory on form
+                    for (var j = 0; j < fieldMandatoryNames.length; j++) {
+                        if (fieldMandatoryNames[i] != 'u_annex_description_tm') {
+                            g_form.setMandatory(fieldMandatoryNames[j], true);
+                        }
+                    }
+                }
+
+
+
+                var fieldsList = g_form.getFieldNames(); //Clear and Hide fields on form which are not part of letter template
+                for (var y = 0; y < fieldsList.length; y++) {
+                    var field = fieldsList[y];
+                    if (field.indexOf('_tm') > -1 && fieldNames.indexOf(field) == -1) {
+                        g_form.clearValue(field);
+                        g_form.setMandatory(field, false);
+                        g_form.setDisplay(field, false);
+                    }
+                }
+
+
+            }
+        }
+
+    }
+
+}

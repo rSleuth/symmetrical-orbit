@@ -1,0 +1,9 @@
+(function executeRule(current, previous /*null when async*/ ) {
+    var dealLIneFieldLabel = "";
+    var dicGr = new GlideRecord("sys_dictionary");
+    if (dicGr.get("element", current.u_deadline_field)) {
+        dealLIneFieldLabel = dicGr.column_label;
+    }
+    current.u_name = (dealLIneFieldLabel != "") ? current.u_template.getDisplayValue() + "-" + dealLIneFieldLabel : current.u_template.getDisplayValue() + "-" + current.u_deadline_field.getDisplayValue();
+
+})(current, previous);

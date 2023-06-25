@@ -1,0 +1,8 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    // Add your code here
+   // gs.addInfoMessage(gs.getMessage("Cannot Add users to this group. Users needs to be added to Access groups."));
+    current.setAbortAction(true);
+
+
+})(current, previous);

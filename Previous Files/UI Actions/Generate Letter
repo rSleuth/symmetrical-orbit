@@ -1,0 +1,16 @@
+function generateLetter() {
+    var ga = new GlideAjax('sn_doc.PP_generateDocumentTemplateAjax');
+    ga.addParam('sysparm_name', 'generateEnforcementActionDocument');
+    ga.addParam('sysparm_task_id', g_form.getUniqueValue());
+    ga.getXMLAnswer(function(answer) {
+        if (answer) {
+            g_form.addInfoMessage(getMessage('Letter has been successfully generated.'));
+   g_form.setValue("u_action_status","approved_pending_letter_delivery");
+   g_form.submit("generate_letter");
+            return;
+        } else {
+            g_form.addErrorMessage(getMessage('Unable to generate document due to an error'));
+            return;
+        }
+    });
+}

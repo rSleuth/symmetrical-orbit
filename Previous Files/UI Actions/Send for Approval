@@ -1,0 +1,9 @@
+// function executeApproval() {
+//     var ga = new GlideAjax('sn_customerservice.PP_CSM_Enforcement_Flow_Ajax_Utils');
+//     ga.addParam('sysparm_name', 'executeEnforcementCaseApproval');
+//     ga.addParam('sysparm_task_id', g_form.getUniqueValue());
+//     ga.getXML();
+//     g_form.submit("pp_send_approval");
+// }
+
+

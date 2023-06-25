@@ -1,0 +1,8 @@
+function onLoad() {
+
+    if (g_scratchpad.csm_agent == 'true' || g_scratchpad.csm_agent == true) {
+        g_form.setMandatory('u_default_covering_officer', true);
+    }
+
+
+}

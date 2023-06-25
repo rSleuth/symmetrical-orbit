@@ -1,0 +1,16 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    //Validate if the user account has csm agent role
+    var result = false;
+
+    var usrRoleRec = new GlideRecord('sys_user_has_role');
+    usrRoleRec.addEncodedQuery('user=' + current.sys_id + '^role=3120f52cc312310015519f2974d3ae83');
+    usrRoleRec.setLimit(1);
+    usrRoleRec.query();
+
+    if (usrRoleRec.hasNext()) {
+        result = true;
+    }
+    g_scratchpad.csm_agent = result;
+
+})(current, previous);

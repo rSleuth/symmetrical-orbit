@@ -1,0 +1,26 @@
+(function executeRule(current, previous /*null when async*/ ) {
+    var enforcementGroupSysID = gs.getProperty('pp.group.allEnforcement_Users'); //To store  the sys_id of the group PP_AllEnforcementUsersGroup
+    /*
+In Insert operation we check if user is already part of the PP_AllEnforcementUsersGroup,if true we skip adding user again. If not we add the user in the group 
+ */
+    if (current.operation() == "insert") {
+        var userPartOfGroup = new PP_Global_Core_Utils().checkUserPartOfGroup(enforcementGroupSysID, current.getValue("user"));
+        if (!userPartOfGroup) {
+            new PP_Global_Core_Utils().addGroupMember(enforcementGroupSysID, current.getValue("user"));
+        }
+    }
+    /*
+In Delete operation we check if user is part of another director or commissioner group, if not we remove his from PP_AllEnforcementUsersGroup group.
+ Encoded query helps us identify if user is part of any Director or Commissioner or Coordinator group
+ */
+    else if (current.operation() == "delete") {
+        var grpMember = new GlideRecord("sys_user_grmember");
+        grpMember.addEncodedQuery("group.u_bca_type=access^group.u_role=3a299982e521a51007538ada7603de69^ORgroup.u_role=9435e461d5d6a550550ce470f32741d3^user=" + current.getValue("user") + "^NQgroup=1dbcb093554ae910515b875f38f273ea^ORgroup=46e7219755cae910515b875f38f2736c^ORgroup=b1f72d9755cae910515b875f38f27325^user=" + current.getValue("user"))
+        grpMember.query();
+        if (grpMember.getRowCount() == 0)
+            new PP_Global_Core_Utils().removeGroupMember(enforcementGroupSysID, current.getValue("user"));
+
+    }
+
+
+})(current, previous);

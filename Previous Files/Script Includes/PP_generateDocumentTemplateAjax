@@ -1,0 +1,83 @@
+var PP_generateDocumentTemplateAjax = Class.create();
+PP_generateDocumentTemplateAjax.prototype = Object.extendsObject(DocumentTemplateAjaxSNC, {
+    initialize: function() {
+        DocumentTemplateAjaxSNC.prototype.initialize.apply(this, arguments);
+    },
+
+    isPublic: function() {
+        return true;
+    },
+
+    /**
+     * Description: generate preview pdf document and attach to template
+     * @param {sysparm_html_template_id} html template sys id
+     * @param {sysparm_task_id} task record sys_id
+     * @return attachment sys id of generated document
+     */
+    generateEnforcementActionPreviewDocument: function() {
+        var htmlTemplateUtils = new sn_doc.PP_generateHtmlTemplateAjaxUtilsSNC();
+        var taskId = this.getParameter('sysparm_task_id');
+        var templateId = this.getTemplate(taskId);
+        var pdfName = this.getParameter("sys_pdf_name");
+
+        if (gs.nil(templateId) || gs.nil(taskId)) return '';
+
+        return htmlTemplateUtils.generate(taskId, templateId, pdfName);
+    },
+
+    deleteGeneratedPreviewDocument: function() {
+
+        var htmlTemplateUtils = new sn_doc.HtmlTemplateUtils();
+        var taskId = this.getParameter('sysparm_task_id');
+        if (gs.nil(taskId)) return '';
+
+        htmlTemplateUtils.deleteGeneratedDocumentPreview(taskId);
+    },
+
+    /*
+    Description : This method returns the sys_id of the HTML template which is selected on Action record.
+    */
+
+    getTemplate: function(taskId) {
+        var rec_template = new GlideRecord("sn_customerservice_action");
+        rec_template.get(taskId);
+        var templateId = rec_template.u_select_letter.u_letter_template.toString();
+        return templateId;
+    },
+
+    // Description : This method generates the PDF letter from the action record.
+
+    generateEnforcementActionDocument: function() {
+        var htmlTemplateUtils = new sn_doc.PP_generateHtmlTemplateAjaxUtilsSNC();
+        var taskId = this.getParameter('sysparm_task_id');
+        var templateId = this.getTemplate(taskId);
+        var pdfName = this._getFileName(taskId);
+
+        if (gs.nil(templateId) || gs.nil(taskId)) return '';
+
+        return htmlTemplateUtils.generate(taskId, templateId, pdfName);
+    },
+    /*
+    Description : This method returns the file name as per naming convention <function code>-<Case abbreviation>-<current date in YYYYMMDD format>-<daily running counter>.
+    */
+ 
+    _getFileName: function(taskId) {
+        var filename = "";
+        var acRec = new GlideRecord("sn_customerservice_action");
+        if (acRec.get(taskId)) {
+            filename += acRec.u_enforcement_case.u_function.u_function_code;
+        }
+        var numGr = new GlideRecord('sys_number');
+        numGr.addQuery('category', acRec.u_enforcement_case.sys_class_name);
+        numGr.query();
+        if (numGr.next())
+            filename += "-" + numGr.prefix;
+        var todayDate=  new GlideDate();
+        var todayDateByFormat = todayDate.getDisplayValueInternal().toString().replaceAll("-","");
+        filename += "-" + todayDateByFormat;
+  var runningCounter = new global.PP_Global_Core_Utils().counterUpdate();
+  filename += "-"  + runningCounter;
+        return filename;
+    },
+    type: 'PP_generateDocumentTemplateAjax'
+});

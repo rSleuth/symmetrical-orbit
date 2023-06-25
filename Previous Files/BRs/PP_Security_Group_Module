@@ -1,0 +1,18 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    var functionSys;
+    if (!gs.hasRole('admin')) {
+        var groupGr = new GlideRecord('sys_user_group');
+        groupGr.addQuery('u_bca_type', 'access');
+        groupGr.addQuery('u_role', gs.getProperty('pp_function_admin_role'));
+        groupGr.query();
+        while (groupGr.next()) {
+            if (gs.getUser().isMemberOf(groupGr.getUniqueValue())) {
+                functionSys = groupGr.getValue('u_functions');
+                current.addQuery('u_functions', functionSys);
+            }
+        }
+    } else return;
+
+
+})(current, previous);

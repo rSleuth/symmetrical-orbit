@@ -1,0 +1,9 @@
+function getSign() {
+    var gr = new GlideModal("accept_signature");
+    gr.setTitle(new GwtMessage().getMessage("Manage Signature"));
+    gr.setWidth("500");
+    gr.setPreference('sysparm_document_id', g_form.getUniqueValue());
+    gr.setPreference('sysparm_table_name', g_form.getTableName());
+    gr.setPreference('sysparm_draw_only', 'true');
+    gr.render();
+}

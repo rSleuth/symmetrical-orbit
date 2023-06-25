@@ -1,0 +1,44 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    // Add your code here
+
+    var department = current.department;
+    var designation = current.u_designation.name;
+    var grDept = new GlideRecord("cmn_department");
+    grDept.addQuery("sys_id", department);
+    grDept.setLimit(1);
+    grDept.query();
+    if (grDept.next()) {
+        if (designation == 'Director') {
+            if (grDept.u_director == '') {
+                grDept.u_director = grDept.u_director + ',' + current.sys_id;
+            } else if (grDept.u_director.indexOf(current.sys_id) == -1) {
+                grDept.u_director = grDept.u_director + ',' + current.sys_id;
+            }
+            grDept.update();
+        } else if (designation == 'Deputy Director') {
+            if (grDept.u_deputy_director == '') {
+                grDept.u_deputy_director = grDept.u_deputy_director + ',' + current.sys_id;
+            } else if (grDept.u_deputy_director.indexOf(current.sys_id) == -1) {
+                grDept.u_deputy_director = grDept.u_deputy_director + ',' + current.sys_id;
+            }
+            grDept.update();
+        } else if (designation == 'Group Director') {
+            var grDeptGrp = new GlideRecord("cmn_department");
+            grDeptGrp.addQuery("sys_id", department.parent);
+            grDeptGrp.setLimit(1);
+            grDeptGrp.query();
+            if (grDeptGrp.next()) {
+                if (grDeptGrp.u_group_director == '') {
+                    grDeptGrp.u_group_director = grDeptGrp.u_group_director + ',' + current.sys_id;
+                } else if (grDeptGrp.u_group_director.indexOf(current.sys_id) == -1) {
+                    grDeptGrp.u_group_director = grDeptGrp.u_group_director + ',' + current.sys_id;
+                }
+                grDeptGrp.update();
+            }
+
+        }
+    }
+
+
+})(current, previous);

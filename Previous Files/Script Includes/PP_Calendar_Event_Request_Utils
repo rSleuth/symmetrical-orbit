@@ -1,0 +1,703 @@
+var PP_Calendar_Event_Request_Utils = Class.create();
+PP_Calendar_Event_Request_Utils.prototype = {
+    initialize: function() {
+        this.TABLE_USER = "sys_user";
+        this.TABLE_USER_GROUP = "sys_user_group";
+        this.TABLE_SCHEDULE = "cmn_schedule";
+        this.TABLE_CALENDAR_EVENT = "cmn_schedule_span";
+        this.TABLE_REQUESTED_ITEM = "sc_req_item";
+        this.RITM_SYSID = '';
+        this.ENABLE_LOG = true;
+
+        this.ppGlobalCoreUtil = new global.PP_Global_Core_Utils();
+        this.agentSchedUtil = new global.AgentScheduleUtil();
+
+    },
+
+    logMessage: function(message) {
+        if (this.ENABLE_LOG) {
+            gs.log(message);
+        }
+        return;
+    },
+    createDeptGroup: function(currentObj) {
+        return this._createDeptGroup(currentObj);
+    },
+    copyDeptNameToGroupName: function(newName, oldName) {
+        return this._copyDeptNameToGroupName(newName, oldName);
+    },
+    updateDeptGroupMembership: function(curObj, prvObj) {
+        return this._updateDeptGroupMembership(curObj, prvObj);
+    },
+
+    addFunctionToUserAcc: function(userSysId, groupSysId) {
+        return this._addFunctionToUserAcc(userSysId, groupSysId);
+    },
+    removeFunctionFromUserAcc: function(userSysId, groupSysId) {
+        return this._removeFunctionFromUserAcc(userSysId, groupSysId);
+    },
+    updateFuncAdminGrpMembership: function(updatedMembers) {
+        return this._updateFuncAdminGrpMembership(updatedMembers);
+    },
+
+    validateAdminRights: function() {
+        return this._validateAdminRights();
+    },
+
+    calendarEventRequestProcessor: function(tableName, sysId) {
+        return this._calendarEventRequestProcessor(tableName, sysId);
+    },
+    createCalendarEvent: function(inputObj, source) {
+        return this._createCalendarEvent(inputObj, source);
+    },
+    createMultiDayEvent: function(inputObj) {
+        return this._createMultiDayEvent(inputObj);
+    },
+    updateCalendarEvent: function(inputObj) {
+        return this._updateCalendarEvent(inputObj);
+    },
+    deleteCalendarEvent: function(inputObj) {
+        return this._deleteCalendarEvent(inputObj);
+    },
+    copyAttachments: function(sourceTable, sourceSysId, targetTable, targetSysId) {
+        return this._copyAttachments(sourceTable, sourceSysId, targetTable, targetSysId);
+    },
+    addDaysToDate: function(date, daysToAdd, type) {
+        return this._addDaysToDate(date, daysToAdd, type);
+    },
+
+
+    getUserCalendarSchedule: function(reqForSysId) {
+        return this._getUserCalendarSchedule(reqForSysId);
+    },
+    getCalendarEventInfo: function(eventSysId) {
+        return this._getCalendarEventInfo(eventSysId);
+    },
+    filterCalendarEvents: function(reqForSysId) {
+        return this._filterCalendarEvents(reqForSysId);
+    },
+    checkForConflicts: function(reqForSysId, startDate, endDate) {
+        return this._checkForConflicts(reqForSysId, startDate, endDate);
+    },
+
+
+    // Create group of BCA type "department" when any new department is created.
+    _createDeptGroup: function(currentObj) {
+        var grpRec = new GlideRecord(this.TABLE_USER_GROUP);
+  grpRec.initialize();
+  grpRec.name = currentObj.name;
+  grpRec.parent = '89a92c8555062510515b875f38f2736d'; // BCA Project Portal 
+  grpRec.u_bca_type = 'department';
+  grpRec.type = '158c848ae5e9651007538ada7603defa,8201666b0b7003004502ab5c37673adb,a6a0666b0b7003004502ab5c37673aef';
+  var groupSysID = grpRec.insert();
+
+ return groupSysID;
+    },
+    /*
+     *Copy department name to corresponding group name
+     *when department name gets updated
+     *
+     *Parameters - newName:dept's new name, oldName:dept's old name
+     */
+    _copyDeptNameToGroupName: function(newName, oldName) {
+        var grpRec = new GlideRecord(this.TABLE_USER_GROUP);
+        grpRec.addQuery('name', oldName);
+        grpRec.orderByDesc('sys_created_on');
+        grpRec.query();
+
+        if (grpRec.next()) {
+            grpRec.setValue('name', newName);
+            grpRec.setWorkflow(false);
+            grpRec.update();
+        }
+        return;
+    },
+
+
+    /*
+     *Find matching groups based on old and new dept of the user account
+     *Add and Remove user from the groups based on user's dept change
+     *
+     *Parameters - curObj: current gliderecord obj, previous object of the gliderecord
+     */
+    _updateDeptGroupMembership: function(curObj, prvObj) { //this.logMessage('_updateDeptGroupMembership 1');
+        var userSysId = curObj.getValue('sys_id');
+        var oldDept = prvObj.getDisplayValue('department');
+        var newDept = curObj.getDisplayValue('department');
+
+        var grpRec = new GlideRecord(this.TABLE_USER_GROUP);
+        grpRec.addQuery('nameIN', oldDept + ',' + newDept);
+        grpRec.query();
+
+        while (grpRec.next()) {
+            var grpSysId = grpRec.getValue('sys_id');
+            if (grpRec.name == oldDept) { //this.logMessage('_updateDeptGroupMembership 2');
+                this.ppGlobalCoreUtil.removeGroupMember(grpSysId, userSysId);
+            } else if (grpRec.name == newDept) { //this.logMessage('_updateDeptGroupMembership 3');
+                this.ppGlobalCoreUtil.addGroupMember(grpSysId, userSysId);
+            } else {
+                //do nothing
+            }
+        }
+
+        return;
+    },
+
+
+    /*
+     *Script to update the bca function field in user profile
+     *when membership of the BCA function type groups changes
+     *
+     *Parameters - userSysId, groupSysId
+     */
+    _addFunctionToUserAcc: function(userSysId, groupSysId) {
+
+        var usrRec = new GlideRecord(this.TABLE_USER);
+
+        if (usrRec.get(userSysId)) {
+            var functionList = usrRec.getValue('u_bca_function');
+
+            //Update bcafunction field only when the function is not already mapped to the user account
+            if (gs.nil(functionList)) {
+                usrRec.setValue('u_bca_function', groupSysId);
+                usrRec.setWorkflow(false);
+                usrRec.update();
+            } else if (functionList.indexOf(groupSysId) == -1) {
+                functionList = functionList + ',' + groupSysId;
+                usrRec.setValue('u_bca_function', functionList);
+                usrRec.setWorkflow(false);
+                usrRec.update();
+            } else {
+                //do nothing
+            }
+        }
+
+        return;
+    },
+
+
+    /*
+     *Script to update the bca function field in user profile
+     *when membership of the BCA function type groups changes
+     *
+     *Parameters - userSysId, groupSysId
+     */
+    _removeFunctionFromUserAcc: function(userSysId, groupSysId) {
+        var usrRec = new GlideRecord('sys_user');
+
+        if (usrRec.get(userSysId)) {
+            var functionList = usrRec.getValue('u_bca_function');
+
+            if (!gs.nil(functionList)) {
+                functionList = functionList.replaceAll(groupSysId, '');
+                usrRec.setValue('u_bca_function', functionList);
+                usrRec.update();
+            }
+
+        }
+
+        return;
+    },
+
+
+    /*
+     *Script to add/remove members from 'BCA Function Admins' group
+     *based on the 'Function Admins' field value changes
+     *
+     *Parameters - updatedMembers: changed list of members of the function
+     */
+    _updateFuncAdminGrpMembership: function() {
+
+        //Get current list of function admin group members
+        var groupSysId = gs.getProperty('pp.group.bca_function_admins');
+        var currentMembers = this.ppGlobalCoreUtil.getGroupMembers(groupSysId);
+        var currentMembersList = gs.nil(currentMembers) ? [] : currentMembers.split(',');
+
+        //Get updated list of users who are currently set as function admin across various functions
+        var latestFuncAdmins = '';
+        var grpRec = new GlideRecord(this.TABLE_USER_GROUP);
+        grpRec.addEncodedQuery('u_bca_type=function^u_function_adminISNOTEMPTY');
+        grpRec.query();
+
+        while (grpRec.next()) {
+            latestFuncAdmins = gs.nil(latestFuncAdmins) ? grpRec.getValue('u_function_admin') : latestFuncAdmins + ',' + grpRec.getValue('u_function_admin');
+        }
+
+        var latestFuncAdminList = gs.nil(latestFuncAdmins) ? [] : latestFuncAdmins.split(',');
+        var arrayUtil = new ArrayUtil();
+        var addMembersList = arrayUtil.diff(latestFuncAdminList, currentMembersList);
+        var removeMembersList = arrayUtil.diff(currentMembersList, latestFuncAdminList);
+
+        for (var i = 0; i < addMembersList.length; i++) {
+            this.ppGlobalCoreUtil.addGroupMember(groupSysId, addMembersList[i]);
+        }
+
+        for (var j = 0; j < removeMembersList.length; j++) {
+            this.ppGlobalCoreUtil.removeGroupMember(groupSysId, removeMembersList[j]);
+        }
+
+        return;
+    },
+
+    _updateFuncAdminGrpMembership_Retired: function(updatedMembers) {
+        var groupSysId = gs.getProperty('pp.group.bca_function_admins');
+
+        var currentMembers = this.ppGlobalCoreUtil.getGroupMembers(groupSysId);
+        var currentMembersList = gs.nil(currentMembers) ? [] : currentMembers.split(',');
+        var updatedMembersList = gs.nil(updatedMembers) ? [] : updatedMembers.split(',');
+
+        var arrayUtil = new ArrayUtil();
+        var addMembersList = arrayUtil.diff(updatedMembersList, currentMembersList);
+        var removeMembersList = arrayUtil.diff(currentMembersList, updatedMembersList);
+
+        for (var i = 0; i < addMembersList.length; i++) {
+            this.ppGlobalCoreUtil.addGroupMember(groupSysId, addMembersList[i]);
+        }
+
+        for (var j = 0; j < removeMembersList.length; j++) {
+            this.ppGlobalCoreUtil.removeGroupMember(groupSysId, removeMembersList[j]);
+        }
+
+        return;
+    },
+
+    _validateAdminRights: function() {
+        var result = gs.hasRole('pp_admin') || gs.hasRole('pp_function_admin') || gs.hasRole('admin');
+        return result;
+    },
+
+    /*
+     *Main function to perform creation/updation/deletion of calendar events for a user
+     *Used by 'Calendar Event Request' catalog item
+     *
+     *Parameters : tableName - RITM tablename, sysId - RITM sysid
+     */
+    _calendarEventRequestProcessor: function(tableName, sysId) {
+        this.logMessage('calendarEventRequestProcessor tableName = ' + tableName + '\n sysId = ' + sysId);
+        if (!gs.nil(tableName) && !gs.nil(sysId)) {
+            var reqRec = new GlideRecord(tableName);
+            if (reqRec.get(sysId)) {
+                this.RITM_SYSID = sysId;
+                //this.logMessage('calendarEventRequestProcessor 1 reqRec.variables.var_all_day = ' + reqRec.variables.requested_for);
+
+                var userSchedule = this._getUserCalendarSchedule(reqRec.variables.requested_for);
+                var startDate = new GlideScheduleDateTime(reqRec.variables.var_start.getDisplayValue());
+                var endDate = new GlideScheduleDateTime(reqRec.variables.var_end.getDisplayValue());
+                var repeatUntil = '';
+                if (!gs.nil(reqRec.variables.var_repeat_until)) {
+                    //var gdt = new GlideDateTime(reqRec.variables.var_repeat_until.getDisplayValue());
+                    var gdt = new GlideDateTime();
+                    gdt.setDisplayValue(reqRec.variables.var_repeat_until.getDisplayValue());
+                    repeatUntil = gdt.getValue();
+                }
+                var repeatType = reqRec.variables.var_repeats + '';
+                //this.logMessage('calendarEventRequestProcessor 2 reqRec.variables.var_repeats = ' + reqRec.variables.var_repeats);
+                if (repeatType == 'NULL_OVERRIDE') {
+                    repeatType = '';
+                }
+
+                var multiDayEvent = this.ppGlobalCoreUtil.multiDayCheck(reqRec.variables.var_start.getDisplayValue(), reqRec.variables.var_end.getDisplayValue());
+                this.logMessage('calendarEventRequestProcessor 2 multiDayEvent = ' + multiDayEvent);
+
+                var inputObj = {
+                    "schedule": userSchedule + '',
+                    "user": reqRec.variables.requested_for + '',
+                    "sys_id": reqRec.variables.var_event + '',
+                    "name": reqRec.variables.var_name + '',
+                    "type": reqRec.variables.var_type + '',
+                    "show_as": reqRec.variables.var_show_as + '',
+                    "start_date_time": startDate + '',
+                    "end_date_time": endDate + '',
+                    "all_day": reqRec.variables.var_all_day + '',
+                    "repeat_type": repeatType + '',
+                    "repeat_count": reqRec.variables.var_repeat_every + '',
+                    "u_remarks": reqRec.variables.var_remarks + '',
+                    "u_reason": reqRec.variables.var_reason + '',
+                    "var_mon": reqRec.variables.var_mon + '',
+                    "var_tue": reqRec.variables.var_tue + '',
+                    "var_wed": reqRec.variables.var_wed + '',
+                    "var_thu": reqRec.variables.var_thu + '',
+                    "var_fri": reqRec.variables.var_fri + '',
+                    "var_sat": reqRec.variables.var_sat + '',
+                    "var_sun": reqRec.variables.var_sun + '',
+                    "monthly_type": reqRec.variables.var_monthly_type + '',
+                    "yearly_type": reqRec.variables.var_yearly_type + '',
+                    "repeat_until": repeatUntil + '',
+                    "float_week": reqRec.variables.var_float_week + '',
+                    "float_day": reqRec.variables.var_float_day + '',
+                    "month": reqRec.variables.var_month + '',
+                    "var_start_display": reqRec.variables.var_start.getDisplayValue() + '',
+                    "var_end_display": reqRec.variables.var_end.getDisplayValue() + '',
+                    "var_repeat_until_display": reqRec.variables.var_repeat_until.getDisplayValue() + '',
+                    "var_multi_day_event": multiDayEvent + ''
+                };
+
+                var requestType = reqRec.variables.var_request_type;
+                requestType = gs.nil(requestType) ? '' : requestType.toString().toLowerCase();
+
+                //if (inputObj.var_multi_day_event == 'false' || inputObj.var_multi_day_event == false) {
+                if (requestType == 'create') {
+                    this._createCalendarEvent(inputObj, 'request');
+                } else if (requestType == 'update') {
+                    this._updateCalendarEvent(inputObj);
+                } else if (requestType == 'delete') {
+                    this._deleteCalendarEvent(inputObj);
+                } else {
+                    //do nothing
+                }
+                /*} else {
+                    if (requestType == 'create') {
+                        this._createMultiDayEvent(inputObj);
+                    } else if (requestType == 'update') {
+                        //this._createMultiDayEvent(inputObj);
+                    } else if (requestType == 'delete') {
+                        this._deleteCalendarEvent(inputObj);
+                    } else {
+                        //do nothing
+                    }
+                }*/
+            }
+        }
+
+        return;
+    },
+
+    _createCalendarEvent: function(inputObj, source) {
+        this.logMessage('calendarEventRequestProcessor _createCalendarEvent In inputObj = ' + JSON.stringify(inputObj));
+
+        if (inputObj.repeat_type == '') {
+            if (inputObj.var_multi_day_event == 'false' || inputObj.var_multi_day_event == false) {
+                var calRec = new GlideRecord(this.TABLE_CALENDAR_EVENT);
+                calRec.initialize();
+                this._setCalendarEntryFieldValues(calRec, inputObj);
+                var eventSysId = calRec.insert();
+                if (source == 'request') {
+                    this._copyAttachments('sc_req_item', this.RITM_SYSID, 'cmn_schedule_span', eventSysId);
+                }
+                return eventSysId;
+            } else {
+                this._createMultiDayEvent(inputObj);
+            }
+        } else {
+            this._createRepeatedCalendarEvents(inputObj);
+        }
+
+        return;
+    },
+
+    _createRepeatedCalendarEvents: function(inputObj) {
+        this.logMessage('calendarEventRequestProcessor _createRepeatedCalendarEvents In 1 inputObj = ' + JSON.stringify(inputObj));
+
+        var repeatType = inputObj.repeat_type;
+        var repeatEvery = inputObj.repeat_count;
+        repeatEvery = gs.nil(repeatEvery) ? 0 : parseInt(repeatEvery);
+        this.logMessage('calendarEventRequestProcessor _createRepeatedCalendarEvents 2 repeatEvery = ' + repeatEvery);
+        var eventInfo = {
+            "schedule": inputObj.schedule + '',
+            "user": inputObj.user + '',
+            "sys_id": inputObj.sys_id + '',
+            "name": inputObj.name + '',
+            "type": inputObj.type + '',
+            "start_date_time": inputObj.start_date_time + '',
+            "end_date_time": inputObj.end_date_time + '',
+            "all_day": inputObj.all_day + '',
+            "show_as": inputObj.show_as + '',
+            "repeat_type": '',
+            "u_remarks": inputObj.u_remarks + '',
+            "u_reason": inputObj.u_reason + '',
+        };
+
+        var startDateNoTime = gs.nil(inputObj.var_start_display) ? '' : inputObj.var_start_display + '';
+        var repeatUntil = gs.nil(inputObj.var_repeat_until_display) ? '' : inputObj.var_repeat_until_display + '';
+
+        if (!gs.nil(startDateNoTime) && !gs.nil(repeatUntil)) {
+            startDateNoTime = startDateNoTime.split(' ')[0] + " 00:00:00";
+            this.logMessage('calendarEventRequestProcessor _createRepeatedCalendarEvents 3 startDateNoTime = ' + startDateNoTime + ':::repeatUntil = ' + repeatUntil);
+
+            var noOfDays = this.ppGlobalCoreUtil.getDateDiff(startDateNoTime, repeatUntil, 'days');
+            noOfDays = gs.nil(noOfDays) ? 0 : parseInt(noOfDays);
+            this.logMessage('calendarEventRequestProcessor _createRepeatedCalendarEvents 4 noOfDays = ' + noOfDays);
+
+            if (noOfDays > 0) {
+                this._createSplitCalendarEvent(eventInfo); //main entry
+
+                var noOfEvents = (repeatEvery > 0) ? noOfDays / repeatEvery : noOfDays;
+                noOfEvents = parseInt(noOfEvents);
+                this.logMessage('calendarEventRequestProcessor _createRepeatedCalendarEvents 5 noOfEvents = ' + noOfEvents);
+
+                if (repeatType == 'daily') {
+                    for (var day = 1; day <= noOfEvents; day++) {
+                        this.logMessage('calendarEventRequestProcessor _createRepeatedCalendarEvents 6 noOfEvents day = ' + day);
+                        var daysToAdd = repeatEvery * day;
+                        eventInfo.start_date_time = this._addDaysToDate(inputObj.var_start_display, daysToAdd, 'GlideScheduleDateTime');
+                        eventInfo.end_date_time = this._addDaysToDate(inputObj.var_end_display, daysToAdd, 'GlideScheduleDateTime');
+                        this.logMessage('calendarEventRequestProcessor _createRepeatedCalendarEvents 6 dates updated day = ' + day + ':::eventInfo.start_date_time = ' + eventInfo.start_date_time + ':::eventInfo.end_date_time = ' + eventInfo.end_date_time);
+                        //this._createSplitCalendarEvent(eventInfo); //main entry
+                        if (inputObj.var_multi_day_event == 'true' || inputObj.var_multi_day_event == true) {
+                            this._createMultiDayEvent(inputObj);
+                        } else {
+                            this._createSplitCalendarEvent(eventInfo); //repeated entries
+                        }
+                    }
+                }
+
+            } else {
+                this.logMessage('calendarEventRequestProcessor _createRepeatedCalendarEvents no of days is 0 - only main event');
+                //this._createSplitCalendarEvent(eventInfo); //main entry
+                if (inputObj.var_multi_day_event == 'true' || inputObj.var_multi_day_event == true) {
+                    this._createMultiDayEvent(inputObj);
+                } else {
+                    this._createSplitCalendarEvent(eventInfo); //main entry
+                }
+
+            }
+
+        } else {
+            this.logMessage('calendarEventRequestProcessor _createRepeatedCalendarEvents start or repeat until is empty - only main event');
+            //this._createSplitCalendarEvent(eventInfo); //main entry
+            if (inputObj.var_multi_day_event == 'false' || inputObj.var_multi_day_event == false) {
+                this._createMultiDayEvent(inputObj);
+            } else {
+                this._createSplitCalendarEvent(eventInfo); //main entry
+            }
+        }
+
+        return;
+    },
+
+    _createSplitCalendarEvent: function(inputObj) {
+        this.logMessage('calendarEventRequestProcessor _createSplitCalendarEvent In inputObj = ' + JSON.stringify(inputObj));
+        var calRec = new GlideRecord(this.TABLE_CALENDAR_EVENT);
+        calRec.initialize();
+        this._setCalendarEntryFieldValues(calRec, inputObj);
+        var eventSysId = calRec.insert();
+        this._copyAttachments('sc_req_item', this.RITM_SYSID, 'cmn_schedule_span', eventSysId);
+        return eventSysId;
+    },
+
+    _createMultiDayEvent: function(inputObj) {
+        this.logMessage('calendarEventRequestProcessor _createMultiDayEvent In 1 inputObj = ' + JSON.stringify(inputObj));
+        var eventInfo = {
+            "schedule": inputObj.schedule + '',
+            "user": inputObj.user + '',
+            "sys_id": inputObj.sys_id + '',
+            "name": inputObj.name + '',
+            "type": inputObj.type + '',
+            "start_date_time": inputObj.start_date_time + '',
+            "end_date_time": inputObj.end_date_time + '',
+            "show_as": inputObj.show_as + '',
+            "repeat_type": '',
+            "u_remarks": inputObj.u_remarks + '',
+            "u_reason": inputObj.u_reason + '',
+        };
+        var startDateTime = inputObj.var_start_display;
+        var endDateTime = inputObj.var_end_display;
+
+        if (!gs.nil(startDateTime) && !gs.nil(endDateTime)) {
+            //this.logMessage('calendarEventRequestProcessor _createMultiDayEvent In 2 eventInfo = ' + JSON.stringify(eventInfo));
+            var multiDayCheck = this.ppGlobalCoreUtil.multiDayCheck(startDateTime, endDateTime);
+            var counter = 0; //counter to prevent loop overrun beyond 31 entries
+
+            while ((multiDayCheck == true || multiDayCheck == 'true') && counter <= 30) {
+
+                this.logMessage('calendarEventRequestProcessor _createMultiDayEvent In 2 counter = ' + counter);
+                var newStartDateTime = '';
+                var newEndDateTime = '';
+                var daysToAdd = counter;
+
+                if (counter == 0) {
+                    newStartDateTime = startDateTime; //first day
+                    newEndDateTime = startDateTime.indexOf(' ') > -1 ? startDateTime.split(' ')[0] : startDateTime;
+                    newEndDateTime = newEndDateTime + ' 23:59:59';
+                } else {
+                    newStartDateTime = startDateTime.indexOf(' ') > -1 ? startDateTime.split(' ')[0] : startDateTime;
+                    newStartDateTime = newStartDateTime + ' 00:00:00';
+
+                    var multiChkStartDateTime = this._addDaysToDate(newStartDateTime, daysToAdd, ''); //normal datetime
+                    multiDayCheck = this.ppGlobalCoreUtil.multiDayCheck(multiChkStartDateTime, endDateTime);
+                    this.logMessage('calendarEventRequestProcessor _createMultiDayEvent In 3 counter = ' + counter + ':::multiDayCheck = ' + multiDayCheck + '\n::newStartDateTime = ' + newStartDateTime + '\n:::multiChkStartDateTime = ' + multiChkStartDateTime + '\n:::endDateTime = ' + endDateTime + '\n:::daysToAdd = ' + daysToAdd);
+                    if (multiDayCheck == false || multiDayCheck == 'false') {
+                        newEndDateTime = endDateTime; //final day
+                    } else {
+                        newEndDateTime = newStartDateTime.indexOf(' ') > -1 ? newStartDateTime.split(' ')[0] : newStartDateTime;
+                        newEndDateTime = newEndDateTime + ' 23:59:59';
+                    }
+                }
+
+                if (multiDayCheck == false || multiDayCheck == 'false') {
+                    eventInfo.start_date_time = this._addDaysToDate(newStartDateTime, daysToAdd, 'GlideScheduleDateTime');
+                    eventInfo.end_date_time = this._addDaysToDate(newEndDateTime, 0, 'GlideScheduleDateTime');
+                    this.logMessage('calendarEventRequestProcessor _createMultiDayEvent In 4 counter = ' + counter + '::eventInfo.start_date_time = ' + eventInfo.start_date_time + '::::eventInfo.end_date_time = ' + eventInfo.end_date_time + '::0 for enddate daysToAdd = ' + daysToAdd);
+                    this._createSplitCalendarEvent(eventInfo);
+                    break; //exit after final day event creation
+
+                } else {
+                    eventInfo.start_date_time = this._addDaysToDate(newStartDateTime, daysToAdd, 'GlideScheduleDateTime');
+                    eventInfo.end_date_time = this._addDaysToDate(newEndDateTime, daysToAdd, 'GlideScheduleDateTime');
+                    this.logMessage('calendarEventRequestProcessor _createMultiDayEvent In 5 counter = ' + counter + '::eventInfo.start_date_time = ' + eventInfo.start_date_time + '::::eventInfo.end_date_time = ' + eventInfo.end_date_time + '::same for start and end date daysToAdd = ' + daysToAdd);
+                    this._createSplitCalendarEvent(eventInfo); //repeated entries
+                }
+                counter++;
+            }
+        }
+
+        return;
+    },
+
+    _copyAttachments: function(sourceTable, sourceSysId, targetTable, targetSysId) {
+        GlideSysAttachment.copy(sourceTable, sourceSysId, targetTable, targetSysId);
+        return;
+
+    },
+
+    _addDaysToDate: function(date, daysToAdd, type) {
+        var result = '';
+        //this.logMessage('calendarEventRequestProcessor _addDaysToDate In 1 date = ' + date + '::::daysToAdd = ' + daysToAdd);
+        var gdt = new GlideDateTime();
+        gdt.setDisplayValue(date);
+        gdt.addDays(daysToAdd);
+        result = gdt.getDisplayValue();
+        //this.logMessage('calendarEventRequestProcessor _addDaysToDate In 2 gdt.getDisplayValue() = ' + gdt.getDisplayValue());
+
+        if (type == 'GlideScheduleDateTime') {
+            result = new GlideScheduleDateTime(gdt.getDisplayValue());
+        }
+        return result;
+    },
+
+    _updateCalendarEvent: function(inputObj) {
+        this.logMessage('calendarEventRequestProcessor updateCalendarEvent In inputObj = ' + JSON.stringify(inputObj) + ':::inputObj.var_multi_day_event = ' + inputObj.var_multi_day_event);
+        if (inputObj.var_multi_day_event == 'false' || inputObj.var_multi_day_event == false) {
+            var calRec = new GlideRecord(this.TABLE_CALENDAR_EVENT);
+            if (calRec.get(inputObj.sys_id)) {
+                this._setCalendarEntryFieldValues(calRec, inputObj);
+                calRec.update();
+            }
+        } else {
+            this._deleteCalendarEvent(inputObj); //Delete current entry
+            this._createMultiDayEvent(inputObj); //create new entries
+        }
+
+        return;
+    },
+
+    _setCalendarEntryFieldValues: function(calRec, inputObj) {
+        //this.logMessage('calendarEventRequestProcessor _setCalendarEntryFieldValues In inputObj = ' + JSON.stringify(inputObj) + '\ntype inputObj = ' + typeof inputObj);
+        var daysOfWeek = '';
+
+        for (var fieldName in inputObj) {
+            //this.logMessage('calendarEventRequestProcessor _setCalendarEntryFieldValues In fieldName = ' + fieldName);
+
+            if (fieldName == 'start_date_time') {
+                calRec.start_date_time = inputObj[fieldName];
+            } else if (fieldName == 'end_date_time') {
+                calRec.end_date_time = inputObj[fieldName];
+            } else if (fieldName.indexOf('var') == -1 && fieldName != 'sys_id') {
+                calRec.setValue(fieldName, inputObj[fieldName]);
+            } else {
+                var daysArr = ['', 'var_mon', 'var_tue', 'var_wed', 'var_thu', 'var_fri', 'var_sat', 'var_sun'];
+                var indexVal = daysArr.indexOf(fieldName);
+                if (indexVal > -1) {
+                    if (inputObj[fieldName] == 'true') {
+                        daysOfWeek = gs.nil(daysOfWeek) ? indexVal + '' : daysOfWeek + '' + indexVal;
+                    }
+                }
+            }
+        }
+
+        if (!gs.nil(daysOfWeek)) {
+            //this.logMessage('calendarEventRequestProcessor _setCalendarEntryFieldValues In daysOfWeek = ' + daysOfWeek);
+            calRec.setValue('days_of_week', daysOfWeek);
+        }
+    },
+
+    _deleteCalendarEvent: function(inputObj) {
+
+        var calRec = new GlideRecord(this.TABLE_CALENDAR_EVENT);
+        if (calRec.get(inputObj.sys_id)) {
+            //calRec.setWorkflow(false);
+            calRec.deleteRecord();
+        }
+
+        return;
+    },
+
+    _getUserCalendarSchedule: function(reqForSysId) {
+        var result = '';
+
+        if (!gs.nil(reqForSysId)) {
+            var agentEventGR = this.agentSchedUtil.getAgentPersonalSchedule(reqForSysId);
+            if (agentEventGR.hasNext()) {
+                if (agentEventGR.next()) {
+                    result = agentEventGR.getValue('personal_schedule');
+                }
+            } else {
+                result = this._createUserCalendarSchedule(reqForSysId);
+            }
+        }
+
+        return result;
+    },
+
+    _createUserCalendarSchedule: function(user) {
+        return this.agentSchedUtil.createPersonalSchedule(user);
+    },
+
+    _getCalendarEventInfo: function(eventSysId) {
+        var resultObj = {};
+
+        if (!gs.nil(eventSysId)) {
+            var calEventRec = new GlideRecord(this.TABLE_CALENDAR_EVENT);
+            if (calEventRec.get(eventSysId)) {
+                resultObj = calEventRec;
+
+                resultObj.start = calEventRec.start_date_time.getDisplayValue() + "";
+                resultObj.end = calEventRec.end_date_time.getDisplayValue() + "";
+                /*resultObj.start = calEventRec.u_start_date_time + "";
+                resultObj.end = calEventRec.u_end_date_time + "";*/
+                resultObj.repeat_until_date = calEventRec.repeat_until.getDisplayValue() + "";
+                resultObj.days_of_week = calEventRec.days_of_week + "";
+
+            }
+        }
+
+        return resultObj;
+
+    },
+
+    /*
+     *Script used to filter calendar events based on logged-in user's access level
+     *For ordinary users without any of the admin rights such as PP, func or super admin
+     *filter returns only upcoming events. This will avoid users editing/deleting their past events.
+     *
+     *Used in 'Event' variable to filter events
+     *Parameters : reqForSysId - requested for user's sysid in catalog item form
+     *
+     */
+    _filterCalendarEvents: function(reqForSysId) {
+        var result = 'user=' + reqForSysId;
+
+        if (this._validateAdminRights() == false) {
+            result = result + '^u_start_date_time>javascript:gs.endOfCurrentMinute()';
+        }
+
+        return result;
+
+    },
+
+    /*
+     *Script used to check conflicts in inspection calendar events for requested for user
+     *Unlike ordinary events multiple inspections cannot be done by the same user at the same time
+     *as mostly inspections occur at different locations.
+     *This function returns true if it identifies a conflict.
+     *
+     *
+     *Parameters : reqForSysId - requested for user's sysid in catalog item form
+     *      startDate, endDate - datetime at which the event starts/ends
+     *
+     */
+    _checkForConflicts: function(reqForSysId, startDateTime, endDateTime) {
+        var result = false;
+        this.logMessage('calendarEventRequestProcessor _checkForConflicts In 1 reqForSysId = ' + reqForSysId + ', startDateTime = ' + startDateTime + ', endDateTime = ' + endDateTime);
+
+        if (!gs.nil(reqForSysId) && !gs.nil(startDa...

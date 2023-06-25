@@ -1,0 +1,38 @@
+var PP_Global_Enforcement_Utils = Class.create();
+PP_Global_Enforcement_Utils.prototype = {
+    initialize: function() {
+        this.ENABLE_LOG = true;
+    },
+
+    logMessage: function(message) {
+        if (this.ENABLE_LOG) {
+            gs.log(message);
+        }
+        return;
+    },
+
+    /* STRY0012280 - Draw e-signature *
+    
+    This method deletes User's previous signature when a new signature is added by the same user.
+    */
+    _deletePreviousSignatureRecords: function(currentObj) {
+        var grPreviousSignatures = new GlideRecord("signature_image"); //query the signature image table
+        grPreviousSignatures.addQuery("sys_id", "!=", currentObj.sys_id);
+        grPreviousSignatures.addQuery("document", currentObj.document);
+        grPreviousSignatures.query(); //query the table to find the previous signature record for same user
+        if (grPreviousSignatures.next()) {
+            grPreviousSignatures.deleteRecord(); //delete record, if found.
+        }
+    },
+
+    _callApproveNotification: function(approvalRecord, arrayUsers, approverList) {
+        gs.eventQueue("pp.enforcement_process.approve", approvalRecord, arrayUsers.toString(), approverList);
+    },
+
+    _callRejectNotification: function(approvalRecord, arrayUsers) {
+        gs.eventQueue("pp.enforcement_process.reject", approvalRecord, arrayUsers.toString());
+    },
+
+
+    type: 'PP_Global_Enforcement_Utils'
+};

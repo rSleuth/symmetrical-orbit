@@ -1,0 +1,9 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    // Add your code here
+    var payment_outstanding = current.u_payment_amount_tm - current.u_payment_received_till_date_tm;
+    current.setValue('u_payment_outstanding_tm', payment_outstanding);
+
+
+
+})(current, previous);

@@ -1,0 +1,174 @@
+var PP_CSM_Enforcement_Utils = Class.create();
+PP_CSM_Enforcement_Utils.prototype = {
+    initialize: function() {
+        this.ENABLE_LOG = true;
+    },
+
+    logMessage: function(message) {
+        if (this.ENABLE_LOG) {
+            gs.log(message);
+        }
+        return;
+    },
+
+    /*Updating of action state [u_action_status] onto either of following:
+    draft,
+    pending_approval,
+    approved_pending_letter_generation,
+    pending_action_from_offender,
+    closed */
+    _setAllActionsToState: function(actionList, stateValue) {
+        while (actionList.next()) {
+            var actionRec = new global.PP_Global_Core_Utils()._getActualRecord(actionList.getTableName(), actionList.getValue('sys_id'));
+            actionRec.u_action_status = stateValue;
+            actionRec.update();
+        }
+    },
+
+    /*Updating of status onto approval_pending */
+    _setAllCaseApproverToState: function(caseApproversList, stateValue) {
+        while (caseApproversList.next()) {
+            var caseApproverRec = new global.PP_Global_Core_Utils()._getActualRecord(caseApproversList.getTableName(), caseApproversList.getValue('sys_id'));
+            caseApproverRec.u_status = stateValue;
+            caseApproverRec.update();
+        }
+    },
+
+    _getRejectApprovalList: function(listOfApprovers, caseObj) {
+        var arrayUsers = [];
+
+        if (listOfApprovers.hasNext()) {
+            while (listOfApprovers.next()) {
+                arrayUsers.push(listOfApprovers.sys_id.toString());
+            }
+        } else {
+            arrayUsers.push(listOfApprovers.sys_id.toString());
+        }
+        var approvRec = this._getUserWhoRejected(arrayUsers.toString(), caseObj);
+        if (arrayUsers.length > 1) {
+            var index = arrayUsers.indexOf(approvRec.approver.sys_id.toString());
+            if (index > -1) {
+                arrayUsers.splice(index, 1); //recipient list
+            }
+        } else {
+            if (approvRec.approver.sys_id.toString() == arrayUsers.toString()) {
+                arrayUsers.pop(approvRec.approver.sys_id.toString());
+            }
+        }
+        arrayUsers.push(caseObj.assigned_to.sys_id.toString());
+  var getAllApprovalUsers = new GlideRecord("sn_customerservice_case_approvers");                    // To get all the users who approved in the previous layer
+  getAllApprovalUsers.addEncodedQuery("u_status=approval_completed^u_case="+caseObj.sys_id);
+  getAllApprovalUsers.query();
+  while(getAllApprovalUsers.next())
+  {
+   arrayUsers.push(getAllApprovalUsers.u_approver.toString());
+  }
+        new global.PP_Global_Enforcement_Utils()._callRejectNotification(approvRec, arrayUsers);
+    },
+
+    _getUserWhoRejected: function(listOfApproversStr, caseObj) {
+        var grApprov = new GlideRecord("sysapproval_approver");
+        grApprov.addQuery("approver.sys_id", "IN", listOfApproversStr);
+        grApprov.addQuery("document_id", caseObj.sys_id);
+        grApprov.addQuery("state", "rejected");
+        grApprov.orderByDesc("sys_created_on");
+        grApprov.query();
+        if (grApprov.next()) {
+            return grApprov;
+        }
+    },
+
+    _getApprovedUser: function(approvalObj, caseObj) {
+        //get list of users doing approval now
+        var listOfApprovers = this._getListOfUsersOnApproval(caseObj);
+        var arrayUsers = [];
+        arrayUsers = listOfApprovers.split(",");
+
+        if (arrayUsers.length > 1) {
+            var index = arrayUsers.indexOf(approvalObj.approver.sys_id.toString());
+            if (index > -1) {
+                arrayUsers.splice(index, 1); //recipient list
+            }
+        } else {
+            if (approvalObj.approver.sys_id.toString() == arrayUsers.toString()) {
+                arrayUsers.pop(approvalObj.approver.sys_id.toString());
+            }
+        }
+        arrayUsers.push(caseObj.assigned_to.sys_id.toString());
+  var getAllApprovalUsers = new GlideRecord("sn_customerservice_case_approvers");   // To get all the users who approved in the previous layer
+  getAllApprovalUsers.addEncodedQuery("u_status=approval_completed^u_case="+caseObj.sys_id);
+  getAllApprovalUsers.query();
+  while(getAllApprovalUsers.next())
+  {
+   arrayUsers.push(getAllApprovalUsers.u_approver.toString());
+  }
+        new global.PP_Global_Enforcement_Utils()._callApproveNotification(approvalObj, arrayUsers, listOfApprovers);
+    },
+
+    _getListOfUsersOnApproval: function(caseObj) {
+        var grApproverList = new GlideRecord("sn_customerservice_case_approvers");
+        grApproverList.addQuery("u_case", caseObj.sys_id);
+        grApproverList.addQuery("u_status", "approval_in_progress");
+        grApproverList.query();
+        if (grApproverList.next()) {
+            //gs.info("@@@APPROVERLIST:"+grApproverList.u_approver);
+            return grApproverList.u_approver;
+        }
+    },
+
+    _getApproverUsersStatus: function(listOfApproversStr, caseObj, size) {
+        var grApprov = new GlideRecord("sysapproval_approver");
+        grApprov.addQuery("approver.sys_id", "IN", listOfApproversStr);
+        grApprov.addQuery("document_id", caseObj.sys_id);
+        grApprov.addQuery("state", "IN", "approved,requested");
+        grApprov.setLimit(size);
+        grApprov.orderByDesc("sys_created_on");
+        grApprov.query();
+        if (grApprov.hasNext()) {
+            return grApprov;
+        }
+    },
+    checkFollowAction: function(actionRec) {
+        var acRec = new GlideRecord("sn_customerservice_action");
+        acRec.addEncodedQuery("u_action_status!=closed^u_parent=" + actionRec);
+        acRec.query();
+        if (acRec.next()) {
+            return true;
+        }
+        return false;
+    },
+
+    closeEnforcementCase: function(actionRec, enfRec) {
+        var flag = true;
+  var message= "";
+        var enfCase = new GlideRecord("sn_customerservice_action")
+        enfCase.addEncodedQuery("u_enforcement_case=" + enfRec + "^sys_id!=" + actionRec);
+        enfCase.query();
+        var recCount = enfCase.getRowCount();
+        while (enfCase.next()) {
+            if (enfCase.getValue("u_action_status") != "closed") {
+                flag = false;
+                break;
+            }
+        }
+
+        if (flag && recCount != 0) {
+            var enfCaseObj = enfCase.u_enforcement_case.getRefRecord();
+            enfCaseObj.state = "5";
+            enfCaseObj.update();
+            message = "Enforcement case marked to closed as all actions related to it are closed";
+            return message;
+        } else if (flag && recCount == 0) {
+            var enfObj = new GlideRecord("sn_customerservice_enforcement_case");
+            if (enfObj.get(enfRec)) {
+                enfObj.state = "5";
+                enfObj.update();
+            }
+            message = "Enforcement case marked to closed as all actions related to it are closed";
+   return message;
+        }
+  return "";
+    },
+
+    type: 'PP_CSM_Enforcement_Utils'
+};

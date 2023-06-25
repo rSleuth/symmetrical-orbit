@@ -1,0 +1,624 @@
+var PP_generateHtmlTemplateAjaxUtilsSNC = Class.create();
+PP_generateHtmlTemplateAjaxUtilsSNC.prototype = Object.extendsObject(HtmlTemplateUtilsSNC, {
+    initialize: function() {
+        this.DEFAULT_TOP_BOTTOM_MARGIN = '72';
+        this.DEFAULT_LEFT_RIGHT_MARGIN = '36';
+
+        this.DEFAULT_HEADER_IMAGE_HEIGHT = '50';
+        this.DEFAULT_FOOTER_IMAGE_HEIGHT = '50';
+        this.FOOTER_TEXT_ABOVE_ALIGNMENT = 'ABOVE';
+        this.FOOTER_TOP_PREFIX = 'TOP_';
+        this.FOOTER_BOTTOM_PREFIX = 'BOTTOM_';
+        this.DEFAULT_FOOTER_IMAGE_ALIGNMENT = 'TOP_CENTER';
+        this.DEFAULT_FOOTER_TEXT_ALIGNMENT = 'BOTTOM_RIGHT';
+        this.HTML_FIELD_TYPES = ['html', 'translated_html'];
+        this.DESCRIPTION_FIELD = 'description';
+
+        this.unEvaluatedVariables = [];
+        this.inaccessibleVariables = [];
+        this.customVariables = ['${Date}'];
+        /*
+   REGEX:
+       /                                -     begin regex
+    \${                              -     string starting with
+    ([a-zA-Z0-9_.]+)                 -     field name can contain 1 (+ at the end) or more
+    (&nbsp;|&ensp;|&emsp;|\s|\t)*    -     zero or more combination of non-breaking space, en space, em space, space, or tab
+    (\-|\+){1}                       -     exactly one occurence of either (-) or (+)
+    (&nbsp;|&ensp;|&emsp;|\s|\t)*    -     zero or more combination of non-breaking space, en space, em space, space, or tab
+    (\d{1,4})                        -     1 to 4 number long co-efficient for the offset
+    ([wdm]{1})                       -     exactly one occurence of w(week), d(day) or m(month)
+    (&nbsp;|&ensp;|&emsp;|\s|\t)*    -     zero or more combination of non-breaking space, en space, em space, space, or tab
+    }                                -     ending with
+    /                                -     end regex
+  */
+
+        this.ALL_FIELD_REGEX = /\${([a-zA-Z0-9_.]+)(&nbsp;|&ensp;|&emsp;|\s|\t)*([\-|\+]{1})(&nbsp;|&ensp;|&emsp;|\s|\t)*(\d{1,4})([wdm]{1})(&nbsp;|&ensp;|&emsp;|\s|\t)*}/;
+        /*
+   REGEX:
+       /                                -     begin regex
+    \${                              -     string starting with
+    (Date)                           -     current date 'Date'field
+    (&nbsp;|&ensp;|&emsp;|\s|\t)*    -     zero or more combination of non-breaking space, en space, em space, space, or tab
+    (\-|\+){1}                       -     exactly one occurence of either (-) or (+)
+    (&nbsp;|&ensp;|&emsp;|\s|\t)*    -     zero or more combination of non-breaking space, en space, em space, space, or tab
+    (\d{1,4})                        -     1 to 4 number long co-efficient for the offset
+    ([wdm]{1})                       -     exactly one occurence of w(week), d(day) or m(month)
+    (&nbsp;|&ensp;|&emsp;|\s|\t)*    -     zero or more combination of non-breaking space, en space, em space, space, or tab
+    }                                -     ending with
+    /                                -     end regex
+  */
+
+        this.CURRENT_DATE_REGEX = /\${(Date)(&nbsp;|&ensp;|&emsp;|\s|\t)*([\-|\+]{1})(&nbsp;|&ensp;|&emsp;|\s|\t)*(\d{1,4})([wdm]{1})(&nbsp;|&ensp;|&emsp;|\s|\t)*}/;
+
+        /*
+         Globally search for current date with offset
+        */
+
+        this.ALL_CURRENT_DATE_REGEX = /\${(Date)(&nbsp;|&ensp;|&emsp;|\s|\t)*([\-|\+]{1})(&nbsp;|&ensp;|&emsp;|\s|\t)*(\d{1,4})([wdm]{1})(&nbsp;|&ensp;|&emsp;|\s|\t)*}/g;
+
+        this.TEMPLATE_SCRIPT_REGEX = /\${template_script:([^}]*)}/;
+    },
+    validateTemplate: function(parsedBody, tableName, templateId, isBlock) {
+        if (!tableName)
+            return parsedBody;
+        parsedBody = this._resetErroredSpanInDocument(parsedBody);
+        var regex = /\${([^}]*)}/g;
+        var matched = parsedBody.match(regex);
+        var gr = new GlideRecord(tableName);
+        //if the gliderecord cannot be initialized do not attempt validation
+        if (!gr.isValid())
+            return parsedBody;
+        for (var i in matched) {
+            if (this.unEvaluatedVariables.indexOf(matched[i]) > -1 ||
+                this.inaccessibleVariables.indexOf(matched[i]) > -1 ||
+                this.customVariables.indexOf(matched[i]) > -1 ||
+                this._isCurrentDateWithOffset(matched[i]))
+                continue;
+
+            //Check for template script
+            if (this._isTemplateScriptToken(matched[i])) {
+                if (this._validateTemplateScriptToken(matched[i]))
+                    parsedBody = parsedBody.replace(matched[i], '<span class="errored-field" style="color:#ff0000;">' + matched[i] + '</span>');
+                continue;
+            }
+
+            //Check for valid signature token
+            if (this._isSignatureToken(matched[i])) {
+                //Signature tokens are not applicable in template blocks
+                if (!isBlock) {
+                    var tokenParticipant = matched[i].match(/\${signature:(.*)}/).pop();
+                    if (this._isValidParticipantName(templateId, tokenParticipant))
+                        continue;
+                }
+                parsedBody = parsedBody.replace(matched[i], '<span class="errored-field" style="color:#ff0000;">' + matched[i] + '</span>');
+                this.unEvaluatedVariables.push(matched[i]);
+                continue;
+            }
+
+
+
+            var element = gr;
+            var field;
+            //Date processing
+            var isOffsetDate = this._isOffsetDate(matched[i], gr);
+            var str = '';
+            if (isOffsetDate) {
+                var offsetDate = this._offsetValues(matched[i]);
+                str = offsetDate.reference;
+            } else {
+                str = matched[i].match(/\${(.*)}/).pop();
+            }
+            str = str.trim();
+            if (!str)
+                continue;
+            var references = str.split(/[\.]+/g);
+            for (var j = 0; j < references.length - 1; j++) {
+                field = references[j];
+                if (element.isValidField(field)) {
+                    if (element.getElement(field).canRead())
+                        element = element.getElement(field).getRefRecord();
+
+                    else {
+                        parsedBody = parsedBody.replace(matched[i], '<span class="errored-field" style="color:#ff0000;">' + matched[i] + '</span>');
+                        this.inaccessibleVariables.push(matched[i]);
+                        break;
+                    }
+                } else
+                    break;
+            }
+
+            field = references[references.length - 1];
+            if (element.isValidField(field)) {
+                if (!element.getElement(field).canRead()) {
+                    parsedBody = parsedBody.replace(matched[i], '<span class="errored-field" style="color:#ff0000;">' + matched[i] + '</span>');
+                    this.inaccessibleVariables.push(matched[i]);
+                }
+            } else {
+                parsedBody = parsedBody.replace(matched[i], '<span class="errored-field" style="color:#ff0000;">' + matched[i] + '</span>');
+                this.unEvaluatedVariables.push(matched[i]);
+            }
+        }
+    },
+
+    _validateTemplateScriptToken: function(scriptToken) {
+        var scriptName = scriptToken.match(this.TEMPLATE_SCRIPT_REGEX).pop();
+        if (gs.nil(scriptName))
+            return false;
+
+        var gr = new GlideRecord('sn_doc_template_script');
+        gr.addQuery('name', scriptName);
+        gr.setLimit(1);
+        gr.query();
+
+        if (!gr.next()) {
+            this.unEvaluatedVariables.push(scriptToken);
+            return false;
+        }
+
+        if (!gr.canRead()) {
+            this.inaccessibleVariables.push(scriptToken);
+            return false;
+        }
+
+        return true;
+    },
+
+    /* Checks if a document template has participant with given name
+     * @param {string} templateId: sys_id of document template
+     * @param {string} participantName String : Name of the participant
+     * return {boolean} : true for valid participant name
+     */
+    _isValidParticipantName: function(templateId, participantName) {
+        var gr = new GlideRecord('sn_doc_participant');
+        gr.addQuery('document_template', templateId);
+        gr.addQuery('name', participantName);
+        gr.setLimit(1);
+        gr.query();
+        if (gr.hasNext())
+            return true;
+        return false;
+    },
+
+
+    _resetErroredSpanInDocument: function(documentBody) {
+        //regular expression that matches all the span pairs in the documentBody with class as errored-field
+        var spanRegex = /<\s*span\s*class="errored-field".*?>/g;
+        var matchedSpanTags = documentBody.match(spanRegex);
+        for (var i in matchedSpanTags) {
+            documentBody = documentBody.replace(matchedSpanTags[i], '<span>');
+        }
+        return documentBody;
+    },
+
+    _isDateType: function(fieldName, tableGr) {
+        var dateTypes = ['glide_date_time', 'date', 'glide_date', 'due_date'];
+        var element = tableGr.getElement(fieldName);
+        return ((element.toString() != null) && dateTypes.indexOf(element.getED().getInternalType()) > -1);
+    },
+
+    _isCurrentDateWithOffset: function(field) {
+        return (field.match(this.CURRENT_DATE_REGEX) != null);
+    },
+
+    _isTemplateScriptToken: function(token) {
+        return (token.match(this.TEMPLATE_SCRIPT_REGEX) != null);
+    },
+
+    _evaluateTemplateScript: function(token, targetGr) {
+        var tokenMatch = token.match(this.TEMPLATE_SCRIPT_REGEX);
+        if (gs.nil(tokenMatch))
+            return '';
+
+        var name = tokenMatch[1];
+
+        var templteScriptGr = new GlideRecord('sn_doc_template_script');
+        templteScriptGr.addQuery('name', name);
+        templteScriptGr.query();
+        if (!templteScriptGr.next())
+            return '';
+
+        var evaluator = new GlideScopedEvaluator();
+        evaluator.putVariable('target', targetGr);
+        return evaluator.evaluateScript(templteScriptGr);
+    },
+
+    _isOffsetDate: function(field, tableGr) {
+        var regEx = this.ALL_FIELD_REGEX;
+        var dateWithOffset = field.match(regEx);
+
+        var isDateType = false;
+        if (dateWithOffset != null && tableGr) {
+            isDateType = this._isDateType(dateWithOffset[1], tableGr);
+        }
+        return (dateWithOffset != null && isDateType);
+    },
+
+    _offsetValues: function(field) {
+        var re = this.ALL_FIELD_REGEX;
+        var dateWithOffset = field.match(re);
+        if (dateWithOffset != null) {
+            return {
+                "reference": dateWithOffset[1], //field name
+                "sign": dateWithOffset[3], // add (+) or subtract (-) date
+                "quantity": dateWithOffset[5],
+                "type": dateWithOffset[6]
+            };
+        }
+        return {
+            "reference": "", //field name
+            "sign": "", // add (+) or subtract (-) date
+            "quantity": "",
+            "type": ""
+        };
+    },
+
+    _isOffsetObjectEmpty: function(offsetObject) {
+        return offsetObject == null || offsetObject.reference == "" || offsetObject.sign == "" || offsetObject.quantity == "" || offsetObject.type == "";
+    },
+
+    _applyOffset: function(elementValue, offsetValue) {
+        if (elementValue && !this._isOffsetObjectEmpty(offsetValue)) {
+            var date = new GlideDateTime();
+            date.setDisplayValue(elementValue);
+            var sign = parseInt(offsetValue.sign + '1');
+            var offset = sign * offsetValue.quantity;
+            switch (offsetValue.type) {
+                case "w":
+                    date.addWeeksLocalTime(offset);
+                    break;
+                case "m":
+                    date.addMonthsLocalTime(offset);
+                    break;
+                case "d":
+                    date.addDaysLocalTime(offset);
+                    break;
+                default:
+                    break;
+            }
+            return date.getLocalDate().getDisplayValue();
+        }
+
+        return "";
+    },
+
+    /* Set date value substitutions in a string
+     * @param docBody String Text to parse
+     * @param token date offset token
+     * return String Parsed body with date occurence replaced
+     */
+    _setDateValue: function(docBody, token) {
+        // Get offsetObject for date occurence and replace with offset value
+        var date = new GlideDateTime().getLocalDate();
+        var offsetObject = this._offsetValues(token);
+        var dateWithOffset = this._applyOffset(date, offsetObject);
+        docBody = docBody.replace(token, dateWithOffset);
+        return docBody;
+    },
+
+    _isSignatureToken: function(token) {
+        var signatureRegex = /\${signature:(.*?)}/g;
+        if (token.match(signatureRegex))
+            return true;
+
+        return false;
+    },
+
+    _isCurrentDateOffsetToken: function(token) {
+        if (token.match(this.CURRENT_DATE_REGEX))
+            return true;
+
+        return false;
+    },
+
+    _isCurrentDateToken: function(token) {
+        if (token.match(/\${Date\}/gi))
+            return true;
+
+        return false;
+    },
+
+    getPrefilledBodyByTemplate: function(htmlTemplateGr, targetId, signatureData) {
+        if (gs.nil(htmlTemplateGr))
+            return '';
+
+        var body = htmlTemplateGr.getValue('html_script_body');
+        var targetTable = htmlTemplateGr.getValue('table');
+        return this.getPrefilledBody(body, targetTable, targetId, signatureData);
+    },
+
+    /*
+     * Method to prefill html document template body and return it.
+     * @parm {String} body : body of html document template
+     * @parm {TableName} : tableName
+     * @parm {SysID} : tableID
+     */
+    getPrefilledBody: function(body, tableName, tableID, signatureData) {
+        var filledBody = body;
+        filledBody = new sn_doc.DocumentTemplateBlockUtils().replaceBlocksWithContent(filledBody, tableID);
+        var glideRecord = new GlideRecord(tableName);
+        if (!glideRecord.get(tableID)) {
+            gs.error("Record not found");
+            return;
+        }
+        var currentDate = new GlideDateTime().getLocalDate();
+        var regex = /\${([^}]*)}/g;
+        var matchedTokens = filledBody.match(regex);
+
+        for (var i in matchedTokens) {
+            var token = matchedTokens[i];
+
+            if (this._isSignatureToken(token)) {
+                if (gs.nil(signatureData))
+                    continue;
+
+                var signatureHtml = this._getSignatureHtml(token, signatureData);
+                if (gs.nil(signatureHtml))
+                    continue;
+
+                filledBody = filledBody.replace(token, signatureHtml);
+                continue;
+            }
+
+            if (this._isCurrentDateOffsetToken(token)) { //replace current date offset tokens. ex : {Date+5d}
+                filledBody = this._setDateValue(filledBody, token);
+                continue;
+            }
+
+            if (this._isCurrentDateToken(token)) { //replace current date tokens. ex : {Date}
+                filledBody = filledBody.replace(token, currentDate.getDisplayValue());
+                continue;
+            }
+
+            if (this._isTemplateScriptToken(token)) {
+                filledBody = filledBody.replace(token, this._evaluateTemplateScript(token, glideRecord));
+                continue;
+            }
+
+            var isOffsetDate = this._isOffsetDate(token, glideRecord);
+            var offsetData = '';
+            var fieldTokens = '';
+            if (isOffsetDate) { //ex: isOffsetDate - true for tokens like: ${due_date+5d} or ${due_date-6m}
+                offsetData = this._offsetValues(token);
+                fieldTokens = offsetData.reference;
+            } else
+                fieldTokens = token.match(/\${(.*)}/).pop(); //token will be Dot walkable fields, ex : ${hr_profile.user.name}
+
+            fieldTokens = fieldTokens.trim();
+            if (!fieldTokens)
+                continue;
+
+            var splitedTokens = fieldTokens.split(/[\.]+/g); //split all the dot walkable fields.
+            var tempGlideRecord = glideRecord;
+            var field = '';
+            for (var j in splitedTokens) {
+                field = splitedTokens[j];
+                if (j == (splitedTokens.length - 1))
+                    break;
+
+                if (tempGlideRecord.isValidField(field)) {
+                    if (tempGlideRecord.getElement(field))
+                        tempGlideRecord = tempGlideRecord.getElement(field).getRefRecord();
+                    else {
+                        gs.error("Element does not exists for the field : " + field);
+                        break;
+                    }
+                } else {
+                    gs.error(field + "is not defined in the table : " + tableName);
+                    break;
+                }
+            }
+
+            if (tempGlideRecord.isValidField(field)) {
+                var fieldValue = tempGlideRecord.getDisplayValue(field);
+                if (isOffsetDate)
+                    filledBody = filledBody.replace(token, this._applyOffset(fieldValue, offsetData));
+                else {
+                    var fieldED = tempGlideRecord.getElement(field).getED();
+                    if (this.HTML_FIELD_TYPES.indexOf(fieldED.getInternalType()) != -1 || fieldED.getName() == this.DESCRIPTION_FIELD)
+                        filledBody = filledBody.replace(token, fieldValue);
+                    else
+                        filledBody = filledBody.replace(token, GlideStringUtil.escapeHTML(fieldValue));
+                }
+            } else
+                gs.error(field + "is not defined in the table : " + tableName);
+        }
+        return filledBody;
+    },
+
+    _getSignatureHtml: function(token, signatureData) {
+        var participant = token.match(/\${signature:(.*)}/).pop();
+        var participantSignatureData = signatureData[participant];
+
+        if (gs.nil(participantSignatureData))
+            return '';
+
+        return this._getSignatureHtmlByData(participant, participantSignatureData);
+    },
+
+    _getSignatureHtmlByData: function(participant, participantSignatureData) {
+        var particpantId = participantSignatureData.sys_id;
+        var signData = participantSignatureData.data;
+
+        var particpantGr = new GlideRecord('sn_doc_participant');
+        if (!particpantGr.get(particpantId))
+            return '';
+
+        return this.getParticipantSignatureHtml(particpantGr, {
+            "data": signData
+        });
+    },
+
+    getParticipantSignatureHtml: function(participnatGr, signatureObj) {
+        var signatureHeight = participnatGr.getValue("signature_height");
+        if (gs.nil(signatureHeight) || signatureHeight <= 0)
+            signatureHeight = 40;
+        var signatureWidth = participnatGr.getValue("signature_width");
+        if (gs.nil(signatureWidth) || signatureWidth <= 0)
+            signatureWidth = 100;
+
+        var src = '';
+        if (!gs.nil(signatureObj.data))
+            src = signatureObj.data;
+        else if (!gs.nil(signatureObj.attachmentId))
+            src = 'sys_attachment.do?sys_id=' + signatureObj.attachmentId;
+        else
+            return '';
+
+        return '<img height="' + signatureHeight + '" width="' + signatureWidth + '" src="' + src + '"></img>';
+    },
+
+    _removeTokens: function(body) {
+        var tokenRegex = new RegExp("\\${[^}]*}", "gi");
+        return body.replace(tokenRegex, "");
+    },
+
+    prefilledBodyWithoutTokens: function(body, tableName, tableID) {
+        var prefilledBody = this.getPrefilledBody(body, tableName, tableID);
+        var bodyWithoutTokens = this._removeTokens(prefilledBody);
+        return bodyWithoutTokens;
+    },
+
+    generatePreviewDocument: function(htmlTemplateGr, htmlBody) {
+        var templateId = htmlTemplateGr.getUniqueValue();
+        // delete existing attached preview
+        this.deleteGeneratedDocumentPreview(templateId);
+
+        var params = {
+            htmlBody: htmlBody,
+            targetTable: 'sn_doc_html_template',
+            targetSysId: templateId,
+            generatedPdfName: 'preview',
+            htmlTemplateGr: htmlTemplateGr
+        };
+        return this.generateDocumentAsAttachment(params);
+    },
+
+    /*
+  Method to generate HTML document with prefill html document template body.
+  documentTemplateId : sys id of the template attached to the record.
+  recordId : sys_id if the target record..
+  pdfName : name of the generated document.
+ */
+    generate: function(taskId, htmlTemplateId, pdfName) {
+        var htmlTemplateGr = this._getGlideRecord("sn_doc_html_template", htmlTemplateId)();
+        var taskGr = this._getGlideRecord(htmlTemplateGr.getValue("table"), taskId)();
+
+        if (htmlTemplateGr.isValid() && taskGr.isValid()) {
+            var tableName = taskGr.getRecordClassName();
+            var body = htmlTemplateGr.getValue("html_script_body");
+            var prefilledBody = this.getPrefilledBody(body, tableName, taskId);
+
+            prefilledBody = this._removeTokens(prefilledBody);
+            var params = {
+                htmlBody: prefilledBody,
+                targetTable: tableName,
+                targetSysId: taskId,
+                generatedPdfName: this._getPdfName(pdfName, htmlTemplateGr),
+                htmlTemplateGr: htmlTemplateGr
+            };
+            return this.generateDocumentAsAttachment(params);
+        } else
+            gs.error("Error generating the document");
+
+        return null;
+
+
+    },
+
+    /*
+     Method to delete exisiting attachment for given table SysId
+     tableSysID : sys id of the template record.
+    */
+    deleteGeneratedDocumentPreview: function(tableSysID) {
+        var sysAttachment = new GlideSysAttachment();
+        var gr = new GlideRecord("sys_attachment");
+        gr.addQuery("table_sys_id", tableSysID);
+        gr.addQuery("file_name", "preview.pdf");
+        gr.query();
+        while (gr.next())
+            sysAttachment.deleteAttachment(gr.getUniqueValue());
+    },
+
+    _getPdfName: function(pdfName, htmlTemplateGr) {
+        pdfName = pdfName || htmlTemplateGr.getValue("name");
+        if (pdfName.indexOf('.pdf') > -1)
+            return pdfName.substring(0, pdfName.indexOf('.pdf'));
+        return pdfName;
+    },
+
+    /**
+     * Description: Generates a pdf for the html and attach it the given record
+     * @param {Object} params
+     * @param {params.htmlBody} : Html content
+     * @param {params.targetTable} : Table to which pdf is attached
+     * @param {params.targetSysId} : Record to which pdf is attached
+     * @param {params.generatedPdfName} : Name of the generated pdf
+     * @param {param.htmlTemplateGr} : Html template record
+     * @return {SysId}
+     */
+    generateDocumentAsAttachment: function(params) {
+        var pdfGenerationAPI = new sn_pdfgeneratorutils.PDFGenerationAPI();
+        var response = pdfGenerationAPI.convertToPDFWithHeaderFooter(
+            params.htmlBody,
+            params.targetTable,
+            params.targetSysId,
+            params.generatedPdfName,
+            this._getHeaderFooterInfo(params.htmlTemplateGr),
+            params.htmlTemplateGr.custom_font.toString()
+        );
+        if (response && response.status != "success") {
+            gs.error("Error generating the document" + response.message);
+            return null;
+        }
+        return response.attachment_id;
+    },
+
+    _getHeaderFooterInfo: function(templateGr) {
+        var additionalInfo = {};
+        additionalInfo['HeaderImageAttachmentId'] = templateGr.header_image.getDisplayValue() ? templateGr.header_image.getDisplayValue().substring(0, templateGr.header_image.getDisplayValue().indexOf('.iix')) : '';
+        additionalInfo['FooterImageAttachmentId'] = templateGr.footer_image.getDisplayValue() ? templateGr.footer_image.getDisplayValue().substring(0, templateGr.footer_image.getDisplayValue().indexOf('.iix')) : '';
+        additionalInfo['HeaderImageAlignment'] = templateGr.header_image_position + '';
+        additionalInfo['FooterImageAlignment'] = gs.nil(templateGr.footnote_vertical_position) || gs.nil(templateGr.footer_image_position) ? this.DEFAULT_FOOTER_IMAGE_ALIGNMENT : this._getFooterPrefixPositon(templateGr.footnote_vertical_position.toString(), templateGr.footer_image_position, true);
+        additionalInfo['FooterTextAlignment'] = gs.nil(templateGr.footnote_vertical_position) || gs.nil(templateGr.footnote_position) ? this.DEFAULT_FOOTER_TEXT_ALIGNMENT : this._getFooterPrefixPositon(templateGr.footnote_vertical_position.toString(), templateGr.footnote_position);
+
+        additionalInfo['FooterText'] = templateGr.footnote + '';
+        additionalInfo['PageSize'] = templateGr.page_size + '';
+        additionalInfo['GeneratePageNumber'] = 'false';
+        additionalInfo['TopOrBottomMargin'] = gs.nil(templateGr.top_bottom_margin) ? this.DEFAULT_TOP_BOTTOM_MARGIN : templateGr.top_bottom_margin + '';
+        additionalInfo['LeftOrRightMargin'] = gs.nil(templateGr.left_right_margin) ? this.DEFAULT_LEFT_RIGHT_MARGIN : templateGr.left_right_margin + '';
+        additionalInfo['HeaderImageHeight'] = gs.nil(templateGr.header_image_height) ? this.DEFAULT_HEADER_IMAGE_HEIGHT : templateGr.header_image_height + '';
+        additionalInfo['FooterImageHeight'] = gs.nil(templateGr.footer_image_height) ? this.DEFAULT_FOOTER_IMAGE_HEIGHT : templateGr.footer_image_height + '';
+        var headerFooterInfo = {};
+        for (var key in additionalInfo) {
+            if (additionalInfo.hasOwnProperty(key) && additionalInfo[key])
+                headerFooterInfo[key] = additionalInfo[key];
+        }
+        return headerFooterInfo;
+    },
+
+    _getFooterPrefixPositon: function(footnotePosition, position, isFooterImage) {
+        var footerPrefix = '';
+        if (footnotePosition == this.FOOTER_TEXT_ABOVE_ALIGNMENT)
+            footerPrefix = isFooterImage ? this.FOOTER_BOTTOM_PREFIX : this.FOOTER_TOP_PREFIX;
+        else
+            footerPrefix = isFooterImage ? this.FOOTER_TOP_PREFIX : this.FOOTER_BOTTOM_PREFIX;
+
+        return footerPrefix + position;
+    },
+    _getGlideRecord: function(table, sysId) {
+        var gr = new GlideRecord(table);
+        return function(query) {
+            if (sysId)
+                gr.get(sysId);
+            else {
+                gr.addActiveQuery();
+                Object.keys(query).map(function(q) {
+                    gr.addQuery(q, query[q]);
+                });
+                gr.query();
+            }
+            return gr;
+        };
+    },
+    type: 'PP_generateHtmlTemplateAjaxUtilsSNC'
+});

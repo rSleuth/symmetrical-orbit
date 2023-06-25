@@ -1,0 +1,52 @@
+(function process( /*RESTAPIRequest*/ request, /*RESTAPIResponse*/ response) {
+    var userID = request.body.data.userId;
+    var writer = response.getStreamWriter();
+    var camDetails = new PP_CAMUtils();
+    var validateNonce = camDetails.validateNonce(request.queryParams.nonce);
+    if (validateNonce) {
+        var validateTS = camDetails.validateTS(request.queryParams.ts);
+        if (validateTS) {
+            var auth = camDetails.authValidation(request);
+            //var auth = true;
+            if (auth) {
+                var validReq = camDetails.validateRequest(request.body.data, "getUserAPI");
+                if (JSUtil.notNil(validReq)) {
+                    var error = camDetails.returnValidError("500", validReq);
+                    response.setStatus(500);
+                    response.setContentType('application/json');
+                    writer.writeString(JSON.stringify(error));
+                } else {
+                    var resp = camDetails.getAndSendUserDetails(userID, "getUserAPI");
+                    gs.info(resp);
+                    if (!resp) {
+                        var error = camDetails.returnValidError("404", "User not found");
+                        response.setContentType('application/json');
+                        response.setStatus(404);
+                        writer.writeString(JSON.stringify(error));
+                    } else {
+                        response.setContentType('application/json');
+                        response.setStatus(200);
+                        writer.writeString(JSON.stringify(resp));
+                    }
+                }
+            } else {
+                response.setContentType('application/json');
+                response.setStatus(401);
+                var error = camDetails.returnValidError("401", "Not a valid authentication token");
+                writer.writeString(JSON.stringify(error));
+            }
+        } else {
+            var error = camDetails.returnValidError("401", "Invalid request date time");
+            response.setContentType('application/json');
+            response.setStatus(404);
+            writer.writeString(JSON.stringify(error));
+        }
+
+    } else {
+        var error = camDetails.returnValidError("401", "Invalid nonce");
+        response.setContentType('application/json');
+        response.setStatus(404);
+        writer.writeString(JSON.stringify(error));
+    }
+
+})(request, response);

@@ -1,0 +1,227 @@
+var PP_CSM_Core_Utils = Class.create();
+PP_CSM_Core_Utils.prototype = {
+    initialize: function() {},
+
+    updateCaseRefNumber: function(tabName, recordGr) {
+        var gdt = new GlideDateTime();
+        var yeartoday = gdt.getYearUTC();
+        var numGr = new GlideRecord('sys_number');
+        numGr.addQuery('category', tabName);
+        numGr.query();
+        if (numGr.next())
+            var prefix = numGr.prefix;
+
+        var runSeq = recordGr.number.toString();
+        gs.info('runSeq' + runSeq);
+        runSeq = runSeq.replace(prefix, '');
+        gs.info('runSeq1' + runSeq);
+
+        var funCode = recordGr.u_function.u_function_code.toString();
+        var caseref = funCode + '-' + prefix + '-' + yeartoday + '/' + runSeq;
+        return caseref;
+
+    },
+
+    counterUpdate: function() {
+        var seqCounter;
+        var counter = gs.getProperty('sn_customerservice.pp_letter_generation_counter');
+        if (counter == 1000000)
+            counter = 1;
+        var sysPropUp = parseInt(counter) + 1;
+        gs.setProperty('sn_customerservice.pp_letter_generation_counter', sysPropUp);
+        var sequence = ['00000', '0000', '000', '00', '0', ''];
+        var count = [10, 100, 1000, 10000, 100000, 1000000];
+        for (i = 0; i <= 5; i++) {
+            if (counter < count[i]) {
+                seqCounter = sequence[i] + counter;
+                break;
+            }
+        }
+        return seqCounter;
+
+    },
+
+    //This function returns condition according to action type to select letter on action table
+
+    getReferenceQualifier: function(actionType, enforcementFunction) {
+
+        var condition = '';
+        if (actionType == 'followupaction') {
+
+            condition = 'u_letter_type=follow_up_action^u_functionLIKE' + enforcementFunction + '^u_active=true';
+
+        } else {
+            condition = 'u_functionLIKE' + enforcementFunction + '^u_active=true^u_letter_type=NULL';
+
+        }
+        return condition;
+    },
+
+    filterByGroupType: function() {
+        //Will show only users who are members of Enforcement groups with BCA type = Access
+        var found_users = [];
+        var grmember = new GlideRecord("sys_user_grmember");
+        grmember.addEncodedQuery("groupLIKEenforcement^group.u_bca_type=access");
+        grmember.addNotNullQuery("user");
+        grmember.query();
+        while (grmember.next()) {
+            found_users.push(grmember.user.sys_id.toString());
+        }
+        var ref_qual = "sys_idIN" + found_users.join(",");
+        return ref_qual;
+    },
+
+    filterByEnforcementGroupType: function(current) {
+        //Will show only users who are members of Enforcement groups with BCA type = Access
+        var found_users = [],
+            apprUser = false;
+        var grmember = new GlideRecord("sys_user_grmember");
+        grmember.addEncodedQuery("groupLIKEenforcement^group.u_bca_type=access");
+        grmember.addNotNullQuery("user");
+        grmember.query();
+        while (grmember.next()) {
+            apprUser = this.checkUserPartOfCaseApprovers(current, grmember.user.sys_id);
+            if (!apprUser && grmember.user.sys_id != current.u_reopen_approver.sys_id)
+                found_users.push(grmember.user.sys_id.toString());
+        }
+        var ref_qual = "sys_idIN" + found_users.join(",");
+        return ref_qual;
+    },
+
+    checkUserPartOfCaseApprovers: function(caseObj, userSysId) {
+
+        var caseapprovalList = [];
+        var caseApprovals = new GlideRecord('sn_customerservice_case_approvers');
+        caseApprovals.addQuery('u_case', caseObj.sys_id);
+        caseApprovals.query();
+        while (caseApprovals.next()) {
+            caseapprovalList.push(caseApprovals.u_approver.toString());
+        }
+
+        if (caseapprovalList.length != 0) {
+            if (caseapprovalList.toString().indexOf(userSysId) > -1) {
+                return true;
+            } else
+                return false;
+        }
+        return "";
+    },
+
+    //This function returns user who are part of the Approving group from the Approval Configuration table
+
+    getApprovalUsers: function(tableName) {
+        var group;
+        var approver_users = [];
+        var approval_group = new GlideRecord("u_approval_configuration");
+        approval_group.addEncodedQuery("u_table=" + tableName);
+        approval_group.query();
+        if (approval_group.next()) {
+            group = approval_group.getValue("u_group");
+        }
+        if (group != "") {
+            var approval_users = new GlideRecord("sys_user_grmember");
+            approval_users.addEncodedQuery("group=" + group);
+            approval_users.query();
+            while (approval_users.next()) {
+                approver_users.push(approval_users.getValue("user"));
+            }
+        }
+        var condition = "sys_idIN" + approver_users + "^sys_id!=" + gs.getUserID();
+        return condition;
+
+    },
+    //Updating counter for approvals that have been addded on the case.
+    updateApproverCounter: function(recordId) {
+        if (!gs.nil(recordId)) {
+            var caseRec = new GlideRecord("sn_customerservice_enforcement_case");
+            if (caseRec.get(recordId)) {
+                var count = parseInt(caseRec.u_approvers_counter) + 1;
+                caseRec.setValue("u_approvers_counter", count);
+                caseRec.update();
+            }
+        }
+    },
+
+    handleCaseApproverDeletion: function(deletedRecordObj) {
+        this._handleCaseApproverDeletion(deletedRecordObj);
+    },
+    _handleCaseApproverDeletion: function(deletedRecordObj) {
+        this._updateApproverLevel(deletedRecordObj);
+        this._reduceApproverCounter(deletedRecordObj.u_case);
+    },
+
+    _reduceApproverCounter: function(recordId) {
+        if (!gs.nil(recordId)) {
+            var caseRec = new GlideRecord("sn_customerservice_enforcement_case");
+            if (caseRec.get(recordId)) {
+                var count = parseInt(caseRec.u_approvers_counter) - 1;
+                caseRec.setValue("u_approvers_counter", count);
+                caseRec.update();
+            }
+        }
+    },
+
+    _updateApproverLevel: function(deletedRecordObj) {
+        var caseId = deletedRecordObj.u_case;
+        var i = 1;
+        var approver_count = deletedRecordObj.u_case.u_approvers_counter - 1;
+        var approver_level = new GlideRecord("sn_customerservice_case_approvers");
+        approver_level.addEncodedQuery("u_case=" + caseId + "^sys_id!=" + deletedRecordObj.getUniqueValue());
+        approver_level.orderBy("u_approval_level")
+        approver_level.query();
+        while (approver_level.next() && i <= approver_count) {
+            approver_level.u_approval_level = i;
+            approver_level.update();
+            i++;
+        }
+
+    },
+
+    showDeclarativeAction: function(parent) {
+        return this._showDeclarativeAction(parent);
+
+    },
+    /*
+    This methods controls the visibility of New ui action on related list of Action table.
+    */
+    _showDeclarativeAction: function(parent) {
+
+        if (parent.getValue("sys_class_name") == "sn_customerservice_enforcement_case" && parent.assigned_to == gs.getUserID() && parent.getValue("state") != 6 && parent.getValue("state") != 5) //  6 Refers to case status - Approval In Progress , 5 refers to case status - Closed
+            return true;
+        else if (parent.getValue("sys_class_name") == "sn_customerservice_action" && (parent.getValue("u_action_status") == "pending_action_from_offender" || (parent.getValue("u_action_status") == "closed")) && (parent.u_enforcement_case.state != 5) && parent.u_enforcement_case.assigned_to == gs.getUserID())
+            return true;
+        else
+            return false;
+    },
+
+    showDeclarativeAddress: function(parent) {
+        return this._showDeclarativeAddress(parent);
+
+    },
+    _showDeclarativeAddress: function(parent) {
+
+        if (parent.getValue("sys_class_name") == "sn_customerservice_enforcement_case" && parent.getValue("state") != 6 && parent.getValue("state") != 5 && parent.assigned_to == gs.getUserID()) //  6 Refers to case status - Approval In Progress , 5 refers to case status - Closed
+            return true;
+        else if (parent.getValue("sys_class_name") == "sn_customerservice_action" && (parent.getValue("u_action_status") == "draft") && parent.u_enforcement_case.assigned_to == gs.getUserID())
+            return true;
+        else
+            return false;
+    },
+
+    showDeclarativeApprovers: function(parent) {
+        return this._showDeclarativeApprovers(parent);
+
+    },
+    _showDeclarativeApprovers: function(parent) {
+
+        if (parent.getValue("sys_class_name") == "sn_customerservice_enforcement_case" && parent.getValue("state") != 6 && parent.getValue("state") != 5 && parent.assigned_to == gs.getUserID()) //  6 Refers to case status - Approval In Progress , 5 refers to case status - Closed
+            return true;
+        else
+            return false;
+    },
+
+
+
+
+    type: 'PP_CSM_Core_Utils'
+};

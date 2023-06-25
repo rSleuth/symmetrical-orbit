@@ -1,0 +1,9 @@
+(function executeRule(current, previous /*null when async*/ ) {
+    
+ var calEventObj = new global.PP_Calendar_Event_Request_Utils();
+ var groupSysID = calEventObj.createDeptGroup(current);
+ current.u_department_group = groupSysID;
+ current.update();
+    
+
+})(current, previous);

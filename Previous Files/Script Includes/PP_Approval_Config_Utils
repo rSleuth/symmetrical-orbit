@@ -1,0 +1,188 @@
+var PP_Approval_Config_Utils = Class.create();
+PP_Approval_Config_Utils.prototype = {
+    initialize: function() {
+        this.TABLE_APPROVAL_CONFIG = 'u_approval_configuration';
+        this.TABLE_APPROVAL_CONFIG_APPROVERS = 'u_approval_configuration_approvers';
+    },
+
+    getApprovers: function(inputParam1, inputParam2) {
+        //gs.log('PP_Approval_Config_Utils: getApprovers 1  inputParam1 = ' + inputParam1 + ':::inputParam2 = ' + inputParam2);
+
+        if (inputParam1 == 'sc_req_item') {
+            return this.getApproversForRITM(inputParam1, inputParam2);
+        }
+
+        return;
+    },
+
+    getApproversForRITM: function(inputParam1, inputParam2) {
+
+        var result = [];
+        var tableName = inputParam1;
+        var sysId = inputParam2;
+
+        var reqRec = new GlideRecord(tableName);
+        if (reqRec.get(sysId)) {
+
+            var aprvlConfigRec = new GlideRecord(this.TABLE_APPROVAL_CONFIG);
+            aprvlConfigRec.addQuery('u_table', tableName);
+            aprvlConfigRec.addQuery('u_active', true);
+            aprvlConfigRec.orderBy('sys_created_on');
+            aprvlConfigRec.query();
+            //gs.log('PP_Approval_Config_Utils: getApproversForRITM 2  aprvlConfigRec.getRowCount() = ' + aprvlConfigRec.getRowCount());
+
+            while (aprvlConfigRec.next()) {
+
+                var conditionCheck = GlideFilter.checkRecord(reqRec, aprvlConfigRec.u_condition);
+                //gs.log('PP_Approval_Config_Utils: getApproversForRITM 3  conditionCheck = ' + conditionCheck + '::::typeof conditionCheck = ' + typeof conditionCheck);
+
+                if (conditionCheck == true || conditionCheck == 'true') {
+                    var aprvrRec = new GlideRecord(this.TABLE_APPROVAL_CONFIG_APPROVERS);
+                    aprvrRec.addQuery('u_approval_config', aprvlConfigRec.sys_id);
+                    aprvrRec.addQuery('u_active', true);
+                    aprvrRec.orderBy('u_order');
+                    aprvrRec.query();
+                    //gs.log('PP_Approval_Config_Utils: getApproversForRITM 4  aprvrRec.getRowCount() = ' + aprvrRec.getRowCount());
+
+                    while (aprvrRec.next()) {
+                        if (this.checkAppliesTo(reqRec, aprvrRec)) {
+                            var approversObj = {};
+
+                            //fetch approvers
+                            var approverType = aprvrRec.getValue('u_approver_type');
+                            if (approverType == 'users') {
+                                approversObj = {
+                                    "users": aprvrRec.getValue('u_approver_users') + '',
+                                    "groups": ""
+                                };
+
+                            } else if (approverType == 'groups') {
+                                approversObj = {
+                                    "users": "",
+                                    "groups": aprvrRec.getValue('u_approver_groups') + ''
+                                };
+
+                            } else if (approverType == 'field') {
+                                var approverUsers = '';
+                                var approverGroups = '';
+                                var fieldName = aprvrRec.getValue('u_approver_field');
+                                gs.log('PP_Approval_Config_Utils: getApproversForRITM 5 fieldName = ' + fieldName);
+
+                                if (!gs.nil(fieldName)) {
+                                    //var refTable = GlideEvaluator.evaluateString('reqRec.' + fieldName + '.sys_class_name');//works in fix script but not here
+                                    var dotWalkedField1 = '\'' + reqRec + '.' + fieldName + '.sys_class_name\''; //PARTIAL WORKING
+                                    var dotWalkedField2 = reqRec + '.' + fieldName + '.sys_class_name'; //NOT WORKING
+                                    var dotWalkedField3 = 'reqRec.' + fieldName + '.sys_class_name'; //NOT WORKING
+                                    gs.log('PP_Approval_Config_Utils: getApproversForRITM 6.1 dotWalkedField1 = ' + dotWalkedField1);
+                                    gs.log('PP_Approval_Config_Utils: getApproversForRITM 6.2 dotWalkedField2 = ' + dotWalkedField2);
+                                    gs.log('PP_Approval_Config_Utils: getApproversForRITM 6.3 dotWalkedField3 = ' + dotWalkedField3);
+
+                                    var refTable = GlideEvaluator.evaluateString(dotWalkedField1);
+                                    var refTable2 = GlideEvaluator.evaluateString(dotWalkedField2);
+                                    var refTable3 = GlideEvaluator.evaluateString(dotWalkedField3);
+                                    gs.log('PP_Approval_Config_Utils: getApproversForRITM 7.1 refTable = ' + refTable);
+                                    gs.log('PP_Approval_Config_Utils: getApproversForRITM 7.2 refTable2 = ' + refTable2);
+                                    gs.log('PP_Approval_Config_Utils: getApproversForRITM 7.3 refTable3 = ' + refTable3);
+
+                                    //refTable = GlideEvaluator.evaluateString(refTable);
+                                    //gs.log('PP_Approval_Config_Utils: getApproversForRITM 7.2 second eval refTable = ' + refTable);
+
+                                    if (refTable == 'sys_user_group') {
+                                        //approverGroups = GlideEvaluator.evaluateString('reqRec.' + fieldName);//works in fix script but not here
+                                        approverGroups = GlideEvaluator.evaluateString(reqRec + '.' + fieldName); //NOT WORKING
+                                    } else if (refTable == 'sys_user') {
+                                        //approverUsers = GlideEvaluator.evaluateString('reqRec.' + fieldName);//works in fix script but not here
+                                        approverUsers = GlideEvaluator.evaluateString(reqRec + '.' + fieldName); //NOT WORKING
+                                    } else {
+                                        if (fieldName == 'requested_for.manager') {
+                                            approverUsers = reqRec.requested_for.manager;
+                                        } else if (fieldName == 'requested_for.department.u_director') {
+                                            approverUsers = reqRec.requested_for.department.u_director;
+                                        } else if (fieldName == 'requested_for.department.dept_head') {
+                                            approverUsers = reqRec.requested_for.department.dept_head;
+                                        } else if (fieldName == 'requested_for.department.u_deputy_director') {
+                                            approverUsers = reqRec.requested_for.department.u_deputy_director;
+                                        } else {
+                                            //do nothing
+                                        }
+                                    }
+
+                                    gs.log('PP_Approval_Config_Utils: getApproversForRITM 8 approverUsers = ' + approverUsers + '::;approverGroups = ' + approverGroups);
+
+                                    approversObj = {
+                                        "users": approverUsers,
+                                        "groups": approverGroups
+                                    };
+
+                                }
+                            } else if (approverType == 'advanced') {
+                                //logic to be implemented in later sprints
+
+                            } else {
+                                //do nothing
+                            }
+
+                            result.push(approversObj);
+                        }
+                    }
+                }
+            }
+
+            gs.log('PP_Approval_Config_Utils: getApproversForRITM 9 result = ' + result);
+            return result;
+        }
+    },
+
+    checkAppliesTo: function(approvalReqRec, aprvrRec) {
+        //gs.log('PP_Approval_Config_Utils: checkAppliesTo 1  approvalReqRec = ' + JSON.stringify(approvalReqRec) + '::: aprvrRec = ' + JSON.stringify(aprvrRec));
+        var result = false;
+        var appliesTo = aprvrRec.u_applies_to;
+        var usersList = aprvrRec.u_applies_to_users;
+        var departmentsList = aprvrRec.u_applies_to_departments;
+        var functionsList = aprvrRec.u_applies_to_functions;
+
+        //gs.log('PP_Approval_Config_Utils: checkAppliesTo 2 appliesTo = ' + appliesTo);
+
+        if (aprvrRec.u_applies_to == 'all') {
+            result = true;
+        } else if (appliesTo == 'users') {
+            if (!gs.nil(usersList)) {
+                if (usersList.indexOf(approvalReqRec.requested_for) > -1) {
+                    result = true;
+                }
+            } else {
+                result = true;
+            }
+
+        } else if (appliesTo == 'departments') {
+            if (!gs.nil(departmentsList)) {
+                if (departmentsList.indexOf(approvalReqRec.requested_for.department) > -1) {
+                    result = true;
+                }
+            } else {
+                result = true;
+            }
+
+        } else if (appliesTo == 'functions') {
+            if (!gs.nil(functionsList)) {
+                var userFunctions = approvalReqRec.requested_for.u_bca_function;
+                var userFunctionsArr = gs.nil(userFunctions) ? [] : userFunctions.split(',');
+                for (var i = 0; i < userFunctionsArr.length; i++) {
+                    if (functionsList.indexOf(userFunctionsArr[i]) > -1) {
+                        result = true;
+                    }
+                }
+            } else {
+                result = true;
+            }
+
+        } else {
+            //do nothing
+        }
+
+        //gs.log('PP_Approval_Config_Utils: checkAppliesTo 3 result = ' + result);
+        return result;
+    },
+
+    type: 'PP_Approval_Config_Utils'
+};

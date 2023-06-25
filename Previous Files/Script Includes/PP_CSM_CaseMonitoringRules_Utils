@@ -1,0 +1,151 @@
+var PP_CSM_CaseMonitoringRules_Utils = Class.create();
+PP_CSM_CaseMonitoringRules_Utils.prototype = {
+    initialize: function() {
+        this.ENABLE_LOG = false;
+    },
+
+    logMessage: function(message) {
+        if (this.ENABLE_LOG) {
+            gs.info(message);
+        }
+        return "";
+    },
+    /* checkDeadlineField - To check the Deadline Field value on the target Record
+    @parameter targetRecord - Object of the current Action record, caseMonitoringRuleRecord - Object of Monitoring Rule Record, filedName - Field Name selected by user on monitoring Rule record, customCheck - optional parameter for ADHOC reminder check
+    @Return Object ex. 
+ {
+  "flag" : <true or false>,
+  "isExpiredDeadline" : <true or false>
+ }
+    */
+
+    checkDeadlineField: function(targetRecord, caseMonitoringRuleRecord, fieldName, customeCheck) {
+        var returnObj = {
+            "flag": false,
+            "isExpiredDeadline": false
+        };
+        if (!gs.nil(targetRecord[fieldName])) {
+            returnObj.flag = true;
+            returnObj.isExpiredDeadline = this._checkDeadlineExpiry(targetRecord, caseMonitoringRuleRecord, targetRecord[fieldName], customeCheck);
+        }
+
+        return JSON.stringify(returnObj);
+
+    },
+    /* _checkDeadlineExpiry - To check the Deadline Field value is overrun or not
+    @parameter targetRecord - Object of the current Action record, caseMonitoringRuleRecord - Object of Monitoring Rule Record, fieldName - Field Name selected by user on monitoring Rule record, customCheck - optional parameter for ADHOC reminder check
+    @Return isExpired - true/false
+    */
+
+    _checkDeadlineExpiry: function(targetRecord, caseMonitoringRuleRecord, deadlineDate, customeCheck) {
+        var firstReminderDays = '';
+        var secondReminderDays = '';
+        var currentDateTime = '';
+        var deadlineDateTimeFirst = '';
+        var deadlineDateTimeSecond = '';
+        var isExpired = false;
+        var RemindersCount = caseMonitoringRuleRecord.getValue("u_number_of_reminders");
+        if (RemindersCount == "1" || customeCheck == true) {
+            firstReminderDays = caseMonitoringRuleRecord.getValue("u_number_of_days_before_deadline_for_1st_reminder");
+            currentDateTime = new GlideDateTime();   
+            currentDateTime.add(new GlideDuration("08:00:00")); // Added 8 Hours as GlideDateTime returning DateTime in UTC   
+            deadlineDateTimeFirst = new GlideDateTime(deadlineDate);
+            deadlineDateTimeFirst.addDaysUTC(-parseInt(firstReminderDays));
+            if (currentDateTime.getDate() > deadlineDateTimeFirst.getDate()) {
+                isExpired = true;
+            }
+        }
+        if (RemindersCount == "2") {
+            firstReminderDays = caseMonitoringRuleRecord.getValue("u_number_of_days_before_deadline_for_1st_reminder");
+            secondReminderDays = caseMonitoringRuleRecord.getValue("u_number_of_days_before_deadline_for_2nd_reminder");
+            currentDateTime = new GlideDateTime();   
+            currentDateTime.add(new GlideDuration("08:00:00")); // Added 8 Hours as GlideDateTime returning DateTime in UTC   
+            deadlineDateTimeFirst = new GlideDateTime(deadlineDate);
+            deadlineDateTimeSecond = new GlideDateTime(deadlineDate);
+            deadlineDateTimeFirst.addDaysUTC(-parseInt(firstReminderDays));
+            deadlineDateTimeSecond.addDaysUTC(-parseInt(secondReminderDays));
+            if (currentDateTime.getDate() > deadlineDateTimeFirst.getDate() && currentDateTime.getDate() > deadlineDateTimeSecond.getDate()) {
+                isExpired = true;
+            }
+        }
+        return isExpired;
+    },
+    /* calculateDuration - To calculate the duration for wait for condition actions in Flow
+    @parameter targetRecord - Object of the current Action record, caseMonitoringRuleRecord - Object of Monitoring Rule Record, fieldName - Field Name selected by user on monitoring Rule record, daysBeforeDeadline - No of Days before trhe dealine
+    @Return isExpired - true/false
+    */
+
+    calculateDuration: function(targetRecord, fieldName, daysBeforeDeadline) {       
+        var currentGdt = new GlideDateTime();  
+        currentGdt.add(new GlideDuration("08:00:00")); // Added 8 Hours as GlideDateTime returning DateTime in UTC  
+        var deadlineDateTime = new GlideDateTime(targetRecord[fieldName]);
+        deadlineDateTime.addDaysUTC(-parseInt(daysBeforeDeadline));        
+        var waitForDuration = GlideDateTime.subtract(currentGdt, deadlineDateTime);        
+        if (waitForDuration.getNumericValue() < 0) { // If the duration is negative, then add minimum duration on Wait for Condition action of 3 seconds
+            return new GlideDuration("00:00:03");
+        } else {
+            return waitForDuration;
+        }
+
+    },
+    /* triggerNotificationEvent - To trigger event for reminder notifications
+       @parameter currentRecordObject - Object of the current Action record, eventName - Event Name String, fieldName - Field Name selected by user on monitoring Rule record
+       
+       */
+    triggerNotificationEvent: function(currentRecordObject, eventName, fieldName) {
+        if (currentRecordObject.isValidRecord()) {
+            var deadlineDate = new GlideDate();
+            deadlineDate.setValue(currentRecordObject[fieldName]);
+            var DeadLineFieldLabel = currentRecordObject[fieldName].getLabel();
+            gs.eventQueue(eventName, currentRecordObject, deadlineDate.getByFormat("dd-MMM-yyyy"), DeadLineFieldLabel);
+        }
+    },
+
+    /* checkDueDealineExpiryFromToday - To check the Deadline Field value is overrun or not from today
+    @parameter targetRecord - Object of the current Action record, caseMonitoringRuleRecord - Object of Monitoring Rule Record, fieldName - Field Name selected by user on monitoring Rule record
+    @Return Object ex. 
+ {
+  "flag" : <true or false>,
+  "isExpiredDeadline" : <true or false>
+ }
+       */
+
+    checkDueDealineExpiryFromToday: function(targetRecord, caseMonitoringRuleRecord, fieldName) {
+        var returnObj = {
+            "flag": false,
+            "isExpiredDeadline": false
+        };
+        if (!gs.nil(targetRecord[fieldName])) {
+            returnObj.flag = true;
+        }
+        var currentDateTime = '';
+        var deadlineDateTime = '';
+        var isExpired = false;
+        currentDateTime = new GlideDateTime();  
+        currentDateTime.add(new GlideDuration("08:00:00")); // Added 8 Hours as GlideDateTime returning DateTime in UTC  
+        deadlineDateTime = new GlideDateTime(targetRecord[fieldName]);
+        if (currentDateTime.getDate() > deadlineDateTime.getDate()) {
+            returnObj.isExpiredDeadline = true;
+        }
+
+        return JSON.stringify(returnObj);
+    },
+
+    /*checkMonitoringRuleInstanceStatus - To check the status of all the associated Case Monitoring Rule Instance to be inactive.
+    @parameter targetRecord - Object of the current Action record
+    @Return true/false
+   */
+    checkMonitoringRuleInstanceStatus: function(targetRecord) {
+        var monitoringInst = new GlideRecord("sn_customerservice_case_monitoring_rule_instance");
+        monitoringInst.addQuery("u_target_record", targetRecord.getValue("sys_id"));
+        monitoringInst.addQuery("u_active", true);
+        monitoringInst.query();
+        if (monitoringInst.hasNext()) {
+            return false;
+        } else
+            return true;
+
+    },
+
+    type: 'PP_CSM_CaseMonitoringRules_Utils'
+};

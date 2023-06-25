@@ -1,0 +1,45 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    // Add your code here
+    var projectID = current.u_project_overview;
+    var firstApprovalDate, lastApprovalDate;
+
+    var caseGr = new GlideRecord("sn_customerservice_case");
+    caseGr.addQuery("u_project_overview", projectID);
+    caseGr.orderByDesc('u_first_approval_date');
+    caseGr.setLimit(1);
+    caseGr.query();
+    if (caseGr.next()) {
+        firstApprovalDate = caseGr.u_first_approval_date.getDisplayValue();
+    }
+    var caseGr1 = new GlideRecord("sn_customerservice_case");
+    caseGr1.addQuery("u_project_overview", projectID);
+    caseGr1.orderByDesc('u_last_approval_date');
+    caseGr1.setLimit(1);
+    caseGr1.query();
+    if (caseGr1.next()) {
+        lastApprovalDate = caseGr1.u_last_approval_date.getDisplayValue();
+    }
+    var date;
+    var projectGr = new GlideRecord("sn_customerservice_project_overview");
+    projectGr.addQuery('sys_id', projectID);
+    projectGr.query();
+    if (projectGr.next()) {
+        if (firstApprovalDate > lastApprovalDate) {
+            var gdt = new GlideDateTime(firstApprovalDate);
+            gdt.addMonthsLocalTime(1);
+            date = gdt;
+
+        } else {
+            var gdt1 = new GlideDateTime(lastApprovalDate);
+            gdt1.addMonthsLocalTime(1);
+            date = gdt1;
+        }
+        projectGr.u_last_date_for_project_timeline_progress = date;
+        projectGr.update();
+    }
+
+
+
+
+})(current, previous);

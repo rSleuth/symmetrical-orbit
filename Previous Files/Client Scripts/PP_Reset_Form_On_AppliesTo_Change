@@ -1,0 +1,40 @@
+function onChange(control, oldValue, newValue, isLoading, isTemplate) {
+    if (isLoading) {
+        return;
+    }
+
+    var fieldArr = ['u_applies_to_users', 'u_applies_to_departments', 'u_applies_to_functions'];
+ var hideFieldArr = [];
+
+    for (var i = 0; i < fieldArr.length; i++) {
+        g_form.setMandatory(fieldArr[i], false);
+        g_form.clearValue(fieldArr[i]);
+        g_form.setDisplay(fieldArr[i], false);
+
+    }
+
+    if (newValue == 'users') {
+        g_form.setDisplay('u_applies_to_users', true);
+        g_form.setMandatory('u_applies_to_users', true);
+  hideFieldArr = ['u_applies_to_departments', 'u_applies_to_functions'];
+
+    } else if (newValue == 'departments') {
+        g_form.setDisplay('u_applies_to_departments', true);
+        g_form.setMandatory('u_applies_to_departments', true);
+  hideFieldArr = ['u_applies_to_users', 'u_applies_to_functions'];
+
+    } else if (newValue == 'functions') {
+        g_form.setDisplay('u_applies_to_functions', true);
+        g_form.setMandatory('u_applies_to_functions', true);
+  hideFieldArr = ['u_applies_to_users', 'u_applies_to_departments'];
+
+    } else {
+  hideFieldArr = ['u_applies_to_users', 'u_applies_to_departments', 'u_applies_to_functions'];
+    }
+
+ for (var j = 0; j < hideFieldArr.length; j++) {
+        g_form.setDisplay(hideFieldArr[j], false);
+  g_form.setMandatory(hideFieldArr[j], false);
+    }
+
+}

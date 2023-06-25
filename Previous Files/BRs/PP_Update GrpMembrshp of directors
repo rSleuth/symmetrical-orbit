@@ -1,0 +1,6 @@
+(function executeRule(current, previous /*null when async*/) {
+
+ // Add your code here
+ var membership = new global.PP_Global_Core_Utils().updateDirectorsGrpMembership();
+
+})(current, previous);

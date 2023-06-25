@@ -1,0 +1,13 @@
+function onChange(control, oldValue, newValue, isLoading, isTemplate) {
+    // if (isLoading || newValue === '') {
+    //     return;
+    // }
+
+    var user = g_form.getReference('u_name', userDetails);
+
+    function userDetails(user) {
+        g_form.setValue('u_email', user.email);
+        g_form.setValue('u_contact_number', user.mobile_phone);
+
+    }
+}

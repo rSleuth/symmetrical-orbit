@@ -1,0 +1,75 @@
+var UserAccessMembershipUtils = Class.create();
+UserAccessMembershipUtils.prototype = {
+    initialize: function() {},
+
+    updateMembership: function(functionVal, roleVal, action, reqUser) {
+        var groupSysId = this.getGroupSysId(functionVal, roleVal);
+        var recordSysId = '';
+        if (action == 'add') {
+            recordSysId = this.addUserToGroup(reqUser, groupSysId);
+        } else if (action == 'remove') {
+            recordSysId = this.removeUserFromGroup(reqUser, groupSysId);
+        }
+        return recordSysId;
+    },
+
+
+    updateSpecialMembership: function(roleVal, action, reqUser) {
+        var groupSysId = this.getSpecialGroupSysId(roleVal);
+        if (action == 'add') {
+            this.addUserToGroup(reqUser, groupSysId);
+        } else if (action == 'remove') {
+            this.removeUserFromGroup(reqUser, groupSysId);
+        }
+    },
+    addUserToGroup: function(reqUser, groupSysId) {
+        var addmembership = new GlideRecord('sys_user_grmember');
+        addmembership.addQuery('group', groupSysId);
+        addmembership.addQuery('user', reqUser);
+        addmembership.query();
+        if (!addmembership.next()) {
+            var addUser = new GlideRecord('sys_user_grmember');
+            addUser.initialize();
+            addUser.group = groupSysId;
+            addUser.user = reqUser;
+            var addedRecord = addUser.insert();
+            return addedRecord;
+        }
+    },
+
+    removeUserFromGroup: function(reqUser, groupSysId) {
+        var updatemembership = new GlideRecord('sys_user_grmember');
+        updatemembership.addQuery('group', groupSysId);
+        updatemembership.addQuery('user', reqUser);
+        updatemembership.query();
+        if (updatemembership.next()) {
+            var deteledRecord = updatemembership.sys_id.toString();
+            updatemembership.deleteRecord();
+            return deteledRecord;
+        }
+    },
+
+    getGroupSysId: function(functionVal, roleVal) {
+        var grp = new GlideRecord('sys_user_group');
+        grp.addQuery('u_functions', functionVal);
+        grp.addQuery('u_role', roleVal);
+        grp.addEncodedQuery('u_special_access=false');
+        grp.query();
+        if (grp.next()) {
+            return grp.getValue('sys_id');
+        }
+    },
+
+
+    getSpecialGroupSysId: function(roleVal) {
+        var grp = new GlideRecord('sys_user_group');
+        grp.addQuery('u_role', roleVal);
+        grp.addEncodedQuery('u_special_access=true');
+        grp.query();
+        if (grp.next()) {
+            return grp.getValue('sys_id');
+        }
+    },
+
+    type: 'UserAccessMembershipUtils'
+};

@@ -1,0 +1,33 @@
+function generateReport() {
+
+    var encQuery = g_list.getQuery();
+    if (encQuery != '') {
+        var ga = new GlideAjax('PP_Global_Ajax_Utils');
+        ga.addParam('sysparm_name', 'generateAuditReport');
+        ga.addParam('sysparm_query', encQuery);
+        ga.addParam('sysparm_fileType', 'csv');
+        ga.getXMLAnswer(function(answer) {
+            var message = (answer == '') ? 'Report generation failed.' : answer;
+            var messageType = 'info';
+            if (message.indexOf('fail') > -1) {
+                messageType = 'error';
+            }
+   
+            GlideUI.get().addOutputMessage({
+                msg: message,
+                type: messageType,
+                id: 'audit_report_generated_message'
+            });
+            return;
+        });
+
+    } else {
+        GlideUI.get().addOutputMessage({
+            msg: "Please filter records before generating the report",
+            type: "error",
+            id: "audit_report_empty_query"
+        });
+        return;
+    }
+
+}

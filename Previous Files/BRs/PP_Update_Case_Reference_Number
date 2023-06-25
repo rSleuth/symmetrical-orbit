@@ -1,0 +1,8 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+   
+    var tabName = current.sys_class_name;
+ var caseRefNum = new PP_CSM_Core_Utils().updateCaseRefNumber(tabName, current);
+ current.number = caseRefNum;
+    
+})(current, previous);

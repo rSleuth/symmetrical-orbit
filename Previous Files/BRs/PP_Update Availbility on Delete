@@ -1,0 +1,48 @@
+(function executeRule(current, previous /*null when async*/ ) {
+    var scheduleid = current.schedule;
+    var startdate = current.u_start_date_time;
+    var enddate = current.u_end_date_time;
+    var gdt = new GlideDateTime(startdate);
+    var date = gdt.getDate();
+ date2 = date + " 01:00:00";
+    var gdr = new GlideDateTime(date2);
+    var date1 = gdr.getDisplayValueInternal();
+ var unavailability =0;
+ var percentageAvailability = 0;
+gs.log( 'test sai '+date);
+    var entries = new GlideRecord('cmn_schedule_span');
+    entries.addEncodedQuery("u_start_date_timeON" + date + "@javascript:gs.dateGenerate('" + date + "','start') @javascript:gs.dateGenerate('" + date + "','end')^typeINtime_off,meeting,stop_file_for_new_cases,stop_file_for_entirely,course,leave^user="+current.user);
+ entries.query();
+    while (entries.next()) {
+  if(entries.sys_id!=current.sys_id){
+        var startDate = entries.u_start_date_time.getGlideObject();
+        var endDate = entries.u_end_date_time.getGlideObject();
+        var durationinsec = gs.dateDiff(startDate.getDisplayValueInternal(), endDate.getDisplayValueInternal(), true);
+        unavailability = unavailability + parseInt(durationinsec);
+        gs.info(entries.user.getDisplayValue() + "   " + entries.name + "   " + entries.type + durationinsec);
+  }
+    }
+ var availability = 32400-unavailability;
+ percentageAvailability = availability/32400*100;
+ gs.log( 'test '+percentageAvailability);
+
+ var agr = new GlideRecord('sn_customerservice_user_availability')
+ agr.addEncodedQuery("u_dateON" + date1 + "@javascript:gs.dateGenerate('" + date1 +"','start') @javascript:gs.dateGenerate('" + date1+ "','end')^u_user=" + current.user);
+    agr.query();
+ if(agr.next()){
+  agr.u_availability = parseFloat(percentageAvailability.toFixed(2)).toString() + '%';
+  agr.u_display_name = current.user.getDisplayValue()+parseFloat(percentageAvailability.toFixed(2)).toString() + '%';
+  agr.update();
+ }else{
+  agr.initialize();
+  agr.u_user = current.user;
+  agr.u_date= date;
+  agr.u_type = 1;
+  agr.u_department = current.user.department;
+  agr.u_availability = parseFloat(percentageAvailability.toFixed(2)).toString() + '%';
+  agr.u_display_name = current.user.getDisplayValue()+_parseFloat(percentageAvailability.toFixed(2)).toString() + '%';
+  agr.insert();
+  
+ } 
+
+})(current, previous);

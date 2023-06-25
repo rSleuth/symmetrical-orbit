@@ -1,0 +1,64 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    var approverArr = [];
+    var permission_type = current.variables.permission_type;
+    if (permission_type == 'function_permission') {
+        var functionArr = current.variables.function_role_access;
+        for (var i = 0; i < functionArr.length; i++) {
+            if (functionArr[i].action != 'existing') {
+                var level1approverSysId = getLevelApproverSysId(functionArr[i].roleVal);
+                gs.log('level1approverSysId function_role_access' + level1approverSysId, 'Email Approvers');
+                var approver_head = getApproverHead(level1approverSysId, functionArr[i].functionVal);
+                gs.log('approver_head function_role_access' + approver_head, 'Email Approvers');
+                approveArr.push(approver_head);
+                gs.log('approveArr function_role_access' + approveArr, 'Email Approvers');
+            }
+        }
+    } else if (permission_type == 'special_permission') {
+        var specialArr = current.variables.special_access;
+        for (var i = 0; i < functionArr.length; i++) {
+            if (functionArr[i].action != 'existing') {
+                var level1approverSysId = getLevelApproverSysId(specialArr[i].roleVal_special);
+                gs.log('level1approverSysId special_access' + level1approverSysId, 'Email Approvers');
+                var approver_head = getSpecialApproverHead(level1approverSysId, functionArr[i].functionVal);
+                gs.log('approver_head special_access' + approver_head, 'Email Approvers');
+                approveArr.push(approver_head);
+                gs.log('approveArr special_access' + approveArr, 'Email Approvers');
+            }
+        }
+    }
+
+    gs.log('approveArr.toString()' + approveArr.toString(), 'Email Approvers');
+    gs.eventQueue('user.access.new.request.raised', current, approveArr.toString(), '');
+
+    function getLevelApproverSysId(roleVal) {
+        var roleValSysId = new GlideRecord('u_roles_to_rank_mapping');
+        roleValSysId.addQuery('u_role', roleVal);
+        roleValSysId.query();
+        if (roleValSysId.next()) {
+            return roleValSysId.u_level_1_approver.toString();
+        }
+
+    }
+
+    function getApproverHead(level1approverSysId, functionVal) {
+        var grp = new GlideRecord('sys_user_group');
+        grp.addEncodedQuery('u_bca_type=access^u_special_access=false');
+        grp.addQuery('u_role', level1approverSysId);
+        grp.addQuery('u_functions', fucntionVal);
+        grp.query();
+        if (grp.next()) {
+            return grp.getValue('sys_id');
+        }
+    }
+
+    function getSpecialApproverHead(level1approverSysId) {
+        var grp = new GlideRecord('sys_user_group');
+        grp.addEncodedQuery('u_bca_type=access^u_special_access=true');
+        grp.addQuery('u_role', level1approverSysId);
+        grp.query();
+        if (grp.next()) {
+            return grp.getValue('sys_id');
+        }
+    }
+})(current, previous);

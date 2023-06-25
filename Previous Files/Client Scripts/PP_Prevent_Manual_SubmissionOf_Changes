@@ -1,0 +1,6 @@
+function onSubmit() {
+    g_form.clearMessages();
+ var url = g_scratchpad.calendarEventRequestUrl;
+    g_form.addErrorMessage('ERROR: You are not allowed to create or update calendar events here. Click '+url+' to submit a request to create/update an entry.');
+    return false;
+}

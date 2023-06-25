@@ -1,0 +1,12 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    var ritm = new GlideRecord('sc_req_item');
+    ritm.addQuery('sys_id', current.sysapproval);
+    ritm.query();
+    if (ritm.next()) {
+        gs.eventQueue('user.access.approval.approved', current, ritm.variables.requested_for.toString(), ritm.variables.requested_by.toString());
+
+    }
+
+
+})(current, previous);

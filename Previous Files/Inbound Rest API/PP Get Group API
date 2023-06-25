@@ -1,0 +1,64 @@
+(function process( /*RESTAPIRequest*/ request, /*RESTAPIResponse*/ response) {
+
+    var groupID = request.body.data.groupId || "error";
+    var nonce = request.queryParams.nonce;
+    var accountid = request.queryParams.accountid;
+    var ts = request.queryParams.ts;
+
+    var camDetails = new PP_CAMUtils();
+    var validateNonce = camDetails.validateNonce(request.queryParams.nonce);
+    if (validateNonce) {
+        var validateTS = camDetails.validateTS(request.queryParams.ts);
+        if (validateTS) {
+            var auth = camDetails.authValidation(request);
+            if (auth) {
+                var validReq = camDetails.validateRequest(request.body.data, "getGroupAPI");
+                var writer = response.getStreamWriter();
+                if (JSUtil.notNil(validReq)) {
+                    var error = {
+                        "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
+                        "detail": "<Error Message>",
+                        "status": "500"
+                    };
+                    error.detail = validReq;
+                    response.setContentType('text/html');
+                    response.setStatus(500);
+                    writer.writeString(JSON.stringify(error));
+                } else {
+                    var resp = camDetails.getAndSendGroupDetails(request.body.data.groupId, "getGroupAPI");
+                    if (!resp) {
+                        var error = camDetails.returnValidError("404", "Group not found");
+                        response.setContentType('application/json');
+                        response.setStatus(404);
+                        writer.writeString(JSON.stringify(error));
+                    } else {
+                        response.setContentType('application/json');
+                        response.setStatus(200);
+                        writer = response.getStreamWriter();
+                        writer.writeString(JSON.stringify(resp));
+                    }
+
+                }
+            } else {
+                response.setContentType('application/json');
+                response.setStatus(401);
+                var error = camDetails.returnValidError("401", "Not a valid authentication token");
+                writer.writeString(JSON.stringify(error));
+            }
+        } else {
+            var error = camDetails.returnValidError("401", "Invalid request date time");
+            response.setContentType('application/json');
+            response.setStatus(404);
+            writer.writeString(JSON.stringify(error));
+        }
+
+    } else {
+        var error = camDetails.returnValidError("401", "Invalid nonce");
+        response.setContentType('application/json');
+        response.setStatus(404);
+        writer.writeString(JSON.stringify(error));
+    }
+
+
+
+})(request, response);

@@ -1,0 +1,44 @@
+(function executeRule(current, previous /*null when async*/ ) {
+    var isDuplicate = isDuplicateDelegation(current);
+    if (isDuplicate) {
+        gs.addErrorMessage(gs.getMessage("There is already an existing delegation for this delegate within the same time period."));
+        current.setAbortAction(true);
+        return;
+    }
+})(current, previous);
+
+function isDuplicateDelegation(current) {
+
+    var ifTrue = false;
+    var delegations = new GlideRecord('sys_user_delegate');
+    delegations.addQuery('delegate', current.delegate);
+    // delegations.addQuery('starts', current.starts);
+    // delegations.addQuery('ends', current.ends);
+    delegations.addQuery("sys_id", "!=", current.sys_id);
+    delegations.query();
+    while (delegations.next()) {
+        var startDate = new GlideScheduleDateTime(current.starts.getDisplayValue());
+        var endDate = new GlideScheduleDateTime(current.ends.getDisplayValue());
+
+        var eventgr = new GlideRecord("cmn_schedule_span");
+        eventgr.addQuery('user', current.user).addOrCondition('user', delegations.user);
+        eventgr.addQuery('type', 'manual_inspection');
+        eventgr.query();
+        while (eventgr.next()) {
+            var eventSDate = new GlideScheduleDateTime(eventgr.start_date_time.getDisplayValue());
+            var eventEDate = new GlideScheduleDateTime(eventgr.end_date_time.getDisplayValue());
+
+            //gs.info('in while' + eventSDate + eventEDate);
+            if ((eventSDate >= startDate && eventSDate <= endDate) || (eventEDate >= startDate && eventEDate <= endDate)) {
+                //gs.info('in if1' + eventgr.sys_id);
+                if ((delegations.starts >= current.starts && delegations.starts <= current.ends) || (delegations.ends >= current.starts && delegations.ends <= current.ends)) {
+                    //gs.info('in if2' + eventgr.sys_id);
+                    ifTrue = true;
+                    return ifTrue;
+                }
+
+            }
+        }
+    }
+    return ifTrue;
+}

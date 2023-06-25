@@ -1,0 +1,7 @@
+(function executeRule(current, previous /*null when async*/ ) {
+    
+ var calEventObj = new global.PP_Calendar_Event_Request_Utils();
+ calEventObj.copyDeptNameToGroupName(current.name, previous.name);
+    
+
+})(current, previous);

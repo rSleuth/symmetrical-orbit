@@ -1,0 +1,29 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    var start = current.getDisplayValue("starts");
+    var end = current.getDisplayValue("ends");
+    var user = current.getValue("user");
+    var delegate = current.getValue("delegate");
+    var UserName = current.getDisplayValue('user');
+    var DelegateName = current.getDisplayValue('delegate');
+
+    var eventStartDate, eventEndDate, eventStartGSDT, eventEndGSDT;
+    var eventgr = new GlideRecord("cmn_schedule_span");
+    eventgr.addQuery('user', user).addOrCondition('user', delegate);
+    //  eventgr.addEncodedQuery('nameSTARTSWITHCover Duty Event has been created');
+    eventgr.addEncodedQuery('name=Cover Duty Event has been created for ' + DelegateName + " " + 'to cover for ' + UserName);
+    eventgr.query();
+    while (eventgr.next()) {
+        eventStartDate = eventgr.getDisplayValue('start_date_time');
+        eventEndDate = eventgr.getDisplayValue('end_date_time');
+        eventStartGSDT = new GlideScheduleDateTime(eventStartDate);
+        eventEndGSDT = new GlideScheduleDateTime(eventEndDate);
+
+        if (eventStartGSDT == start && eventEndGSDT == end) {
+   eventgr.deleteRecord();
+  }
+           
+
+    }
+
+})(current, previous);

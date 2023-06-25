@@ -1,0 +1,69 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    var startdate = current.u_start_date_time;
+    var gdt = new GlideDateTime(startdate);
+    var date1 = gdt.getDate();
+    date2 = date1 + " 01:00:00";
+    var gdr = new GlideDateTime(date2);
+    var date = gdr.getDisplayValueInternal();
+    var end = date1 + " 10:00:00";
+    var gdr1 = new GlideDateTime(end);
+    var dateEnd = gdr1.getDisplayValueInternal();
+    var uavailability = 0;
+    var percentageAvailability = 0;
+    var department = current.user.department;
+    var parent = '';
+    var entries = new GlideRecord('cmn_schedule_span');
+    entries.addEncodedQuery("u_start_date_timeON" + date1 + "@javascript:gs.dateGenerate('" + date1 + "','start') @javascript:gs.dateGenerate('" + date1 + "','end')^typeINtime_off,meeting,stop_file_for_new_cases,stop_file_for_entirely,course,leave^user=" + current.user);
+    entries.query();
+    while (entries.next()) {
+        var startDate = entries.u_start_date_time.getGlideObject();
+        var endDate = entries.u_end_date_time.getGlideObject();
+        var durationinsec = gs.dateDiff(startDate.getDisplayValueInternal(), endDate.getDisplayValueInternal(), true);
+        uavailability = uavailability + parseInt(durationinsec);
+        gs.info(entries.user.getDisplayValue() + "   " + entries.name + "   " + entries.type + durationinsec);
+    }
+    var availability = 32400 - uavailability;
+    percentageAvailability = availability/32400 * 100;
+
+
+    var agr = new GlideRecord('sn_customerservice_user_availability')
+    agr.addEncodedQuery("u_dateON" + date + "@javascript:gs.dateGenerate('" + date + "','start') @javascript:gs.dateGenerate('" + date + "','end')^u_user=" + current.user);
+    agr.query();
+    if (agr.next()) {
+        agr.u_availability = parseFloat(percentageAvailability.toFixed(2)).toString() + '%';
+        agr.u_display_name = current.user.getDisplayValue() + " - " + parseFloat(percentageAvailability.toFixed(2)).toString() + '%';
+        agr.update();
+    } else {
+        var dgr = new GlideRecord('sn_customerservice_user_availability');
+        dgr.addEncodedQuery("u_dateON" + date + "@javascript:gs.dateGenerate('" + date + "','start') @javascript:gs.dateGenerate('" + date + "','end')^u_type=2^u_department=" + department);
+        dgr.query();
+        if (dgr.next()) {
+            parent = dgr.sys_id;
+        } else {
+            dgr.initialize();
+            dgr.u_department = department;
+            dgr.u_date = date;
+   dgr.u_end_date=dateEnd;
+            dgr.u_type = 2;
+            dgr.u_availability = parseFloat(percentageAvailability.toFixed(2)).toString() + '%';
+            dgr.u_display_name = department.id + " - " + parseFloat(percentageAvailability.toFixed(2)).toString() + '%';
+            parent = dgr.insert();
+
+        }
+      //  agr.addEncodedQuery
+        agr.initialize();
+        agr.u_user = current.user;
+        agr.u_date = date;
+  agr.u_end_date = dateEnd;
+        agr.u_type = 1;
+        agr.u_department = current.user.department;
+        agr.u_availability = parseFloat(percentageAvailability.toFixed(2)).toString() + '%';
+        agr.u_display_name = current.user.getDisplayValue() + " - " + parseFloat(percentageAvailability.toFixed(2)).toString() + '%';
+        agr.u_parent = parent;
+        gs.info(parent);
+        agr.insert();
+
+    }
+
+})(current, previous);

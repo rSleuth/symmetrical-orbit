@@ -1,0 +1,93 @@
+var PP_CSM_Enforcement_Flow_Ajax_Utils = Class.create();
+PP_CSM_Enforcement_Flow_Ajax_Utils.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
+
+    executeEnforcementCaseApproval: function() {
+        var taskId = this.getParameter('sysparm_task_id');
+        var caseObj = new global.PP_Global_Core_Utils()._getActualRecord("sn_customerservice_enforcement_case", taskId);
+        var inputs = {};
+        inputs['enforcement_case'] = caseObj;
+
+        sn_fd.FlowAPI.executeSubflow('pp_enforcement_approval', inputs);
+    },
+
+    getReopenConfiguration: function() {
+        var tableName = this.getParameter('sysparm_tableName');
+        return new global.PP_Global_Core_Utils().getReopenConfig(tableName);
+
+    },
+
+    executeReopenCaseApproval: function() {
+        var taskId = this.getParameter('sysparm_task_id');
+        var tableName = this.getParameter('sysparm_tableName');
+        var caseObj = new global.PP_Global_Core_Utils()._getActualRecord(tableName, taskId);
+        var inputs = {};
+        inputs['pp_case'] = caseObj;
+
+        sn_fd.FlowAPI.executeSubflow('pp_reopen_approval', inputs);
+    },
+    // updating action status and delivary status field using ui action mark delivered
+    checkactionStatus: function() {
+        var message;
+        var action = this.getParameter('sysparm_task_id');
+        var statusfields = JSON.parse(this.getParameter('sysparm_status'));
+        var fields = ['u_email', 'u_email_delivery_status', 'u_by_hand', 'u_by_hand_delivery_status', 'u_ar_registered', 'u_ar_registered_delivery_status', 'u_normal_mail', 'u_normal_mail_delivery_status', 'u_registered_mail', 'u_registered_mail_delivery_status'];
+        var actgr = new GlideRecord('sn_customerservice_action');
+        if (actgr.get(action)) {
+            if (actgr.u_parent != '') {
+                // For Follow-up actions
+                actgr.setValue('u_action_status', 'closed');
+                for (var i = 0; i < fields.length; i++) {
+                    if (statusfields[fields[i]])
+                        actgr.setValue(fields[i], statusfields[fields[i]]); //set delivery status field values retrived from ui action mark delivered
+                }
+                actgr.update();
+                message = "Delivery status updated.";
+            } else {
+                // For Action
+                var actionStatus;
+                if (actgr.u_select_letter.u_action == true) {
+                    actionStatus = 'pending_action_from_offender';
+                } else {
+                    actionStatus = 'closed';
+                }
+                actgr.setValue('u_action_status', actionStatus);
+                for (var j = 0; j < fields.length; j++) {
+
+                    if (statusfields[fields[j]]) {
+                        actgr.setValue(fields[j], statusfields[fields[j]]); //set delivery status field values retrived from ui action mark delivered
+                    }
+
+                }
+                actgr.update();
+                message = "Delivery status updated.";
+
+                // if (actionStatus == 'closed') { //close enforcement case if all actions were closed
+                //     var ecase = actgr.getValue('u_enforcement_case');
+                //     var ecase_obj = actgr.u_enforcement_case.getRefRecord();
+
+                //     var all_actions = new GlideRecord('sn_customerservice_action');
+                //     all_actions.addQuery('u_enforcement_case', ecase);
+                //     all_actions.query();
+                //     var action_count = all_actions.getRowCount();
+                //     var count = 0;
+                //     while (all_actions.next()) {
+                //         if (all_actions.getValue('u_action_status') == 'closed') {
+                //             count++;
+                //         }
+                //         if (count == action_count) {
+                //             ecase_obj.state = 5;
+                //             ecase_obj.update();
+                //             message = "enforcement case marked to closed as all actions related to it are closed";
+                //         }
+                //     }
+                // }
+            }
+        }
+        return message;
+    },
+
+
+
+
+    type: 'PP_CSM_Enforcement_Flow_Ajax_Utils'
+});

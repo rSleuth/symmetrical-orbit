@@ -1,0 +1,133 @@
+var PP_User_Access_Utils = Class.create();
+PP_User_Access_Utils.prototype = Object.extendsObject(AbstractAjaxProcessor, {
+
+    populateGroupCluster: function() {
+        var cluster = '';
+        var deptSydId = this.getParameter('sysparm_dept');
+        var allDetails = [];
+        var userGrp = this.getGroupSysId(deptSydId);
+        if (!gs.nil(userGrp)) {
+            var cluster = this.getGroupSysId(userGrp);
+        }
+        var obj = {};
+        obj.userGrp = userGrp.toString();
+        obj.cluster = cluster.toString();
+        allDetails.push(obj);
+        return JSON.stringify(allDetails);
+
+    },
+
+    getGroupSysId: function(deptSydId) {
+        var grp = new GlideRecord('cmn_department');
+        grp.addQuery('sys_id', deptSydId);
+        grp.query();
+        if (grp.next()) {
+            return grp.parent.toString();
+        }
+
+    },
+    userRoleValidation: function() {
+        var role = this.getParameter('sysparm_role');
+        gs.log('role :' + role, 'BCA');
+        var req_user = this.getParameter('sysparm_req_user');
+        var user_type = this.getParameter('sysparm_user_type');
+        var user_desg = this.getParameter('sysparm_req_desg');
+        gs.log('user_desg :' + user_desg, 'BCA');
+        var designationArr = [];
+
+        var roleCheck = new GlideRecord('u_roles_to_rank_mapping');
+        roleCheck.addQuery('u_role', role);
+        roleCheck.addEncodedQuery('u_designationISNOTEMPTY');
+        roleCheck.query();
+        while (roleCheck.next()) {
+            designationArr.push(roleCheck.u_designation.toString());
+        }
+
+        gs.log('designationArr :' + designationArr.toString(), 'BCA');
+
+        if (designationArr.length > 0) {
+            if (user_type == 'existing_user') {
+                var desCheck = new GlideRecord('sys_user');
+                desCheck.addQuery('sys_id', req_user);
+                desCheck.addEncodedQuery('u_designation.sys_idIN' + designationArr.toString());
+                desCheck.query();
+                if (desCheck.next()) {
+                    return true;
+                } else {
+                    return false;
+                }
+            } else if (user_type == 'new_user') {
+                var res = designationArr.toString().includes(user_desg.toString());
+                gs.log('Res : ' + res, 'BCA');
+                if (res == true || res == 'true') {
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+
+        } else {
+            return true;
+        }
+
+    },
+
+    populateFunctionRoleForRequestedFor: function() {
+        var req_user = this.getParameter('sysparm_req_user');
+        var allDetailsArr = [];
+        var grmember = new GlideRecord('sys_user_grmember');
+        grmember.addEncodedQuery('group.u_bca_type=access^group.u_special_access=false^user=' + req_user);
+        grmember.query();
+        while (grmember.next()) {
+            var obj = {};
+            obj.functionVal = grmember.group.u_functions.toString();
+            obj.roleVal = grmember.group.u_role.toString();
+            obj.action = 'existing';
+            allDetailsArr.push(obj);
+        }
+        // gs.log('allDetailsArr' + JSON.stringify(allDetailsArr), 'allDetailsArr');
+        return JSON.stringify(allDetailsArr);
+
+    },
+
+    functionRoleCheck: function(functionVal) {
+        var roleArr = [];
+        var gr = new GlideRecord('sys_user_group');
+        gr.addEncodedQuery('u_special_access=false^active=true^u_roleISNOTEMPTY');
+        gr.addQuery('u_functions', functionVal);
+        gr.query();
+        while (gr.next()) {
+            roleArr.push(gr.u_role.toString());
+        }
+        return 'sys_idIN' + roleArr.toString();
+    },
+
+    populateSpecialRoleForRequestedFor: function() {
+        var req_user = this.getParameter('sysparm_req_user');
+        var allDetailsArr = [];
+        var grmember = new GlideRecord('sys_user_grmember'); //group.u_roleISNOTEMPTY
+        grmember.addEncodedQuery('group.u_bca_type=access^group.u_special_access=true^group.u_roleISNOTEMPTY^user=' + req_user);
+        grmember.query();
+        while (grmember.next()) {
+            var obj = {};
+            // obj.functionVal = grmember.group.u_functions.toString();
+            obj.roleVal_special = grmember.group.u_role.toString();
+            if (obj.roleVal_special == '87bbb853554ae910515b875f38f273b0') { //Head of department
+                var user = new GlideRecord('sys_user');
+                user.addQuery('sys_id', req_user);
+                user.query();
+                if (user.next()) {
+                    obj.department = user.department.toString();
+                }
+            } else {
+                obj.department = '';
+            }
+            obj.action_special = 'existing';
+            allDetailsArr.push(obj);
+        }
+        return JSON.stringify(allDetailsArr);
+
+    },
+
+    type: 'PP_User_Access_Utils'
+});

@@ -1,0 +1,50 @@
+(function executeRule(current, previous /*null when async*/ ) {
+    var eventUser = '';
+    var startDate = new GlideScheduleDateTime(current.starts.getDisplayValue());
+    var endDate = new GlideScheduleDateTime(current.ends.getDisplayValue());
+    if (!gs.nil(current.user)) {
+        eventUser += current.user + ',';
+    }
+    if (!gs.nil(current.delegate)) {
+        eventUser += current.delegate + ',';
+    }
+    var userName, userObj;
+    var scheduleSysID;
+    var list2Check = eventUser.split(',');
+    if (list2Check.length > 0) {
+        list2Check.forEach(function(eventUserID) {
+            if (eventUserID != '') {
+                if (eventUserID == current.user) {
+                    userName = current.user.name;
+                    userObj = current.user;
+                } else if (eventUserID == current.delegate) {
+                    userName = current.delegate.name;
+                    userObj = current.delegate;
+                }
+                var schedule = new GlideRecord("cmn_schedule");
+                schedule.addEncodedQuery("name=" + userName + " " + "Personal Schedule");
+                schedule.addQuery('description', userObj.email);
+                schedule.query();
+                if (schedule.next()) {
+                    scheduleSysID = schedule.getUniqueValue();
+                } else {
+                    schedule.initialize();
+                    schedule.name = userName + " " + "Personal Schedule";
+                    schedule.sys_name = userName + " " + "Personal Schedule";
+                    schedule.description = userObj.email;
+                    scheduleSysID = schedule.insert();
+                }
+                var event = new GlideRecord("cmn_schedule_span");
+                event.initialize();
+                event.type = 'cover_duty_events';
+                event.show_as = 'busy';
+                event.start_date_time = startDate;
+                event.end_date_time = endDate;
+                event.user = eventUserID;
+                event.schedule = scheduleSysID;
+                event.name = 'Cover Duty Event has been created for ' + current.delegate.name + " " + 'to cover for ' + current.user.name;
+                event.insert();
+            }
+        }, this);
+    }
+})(current, previous);

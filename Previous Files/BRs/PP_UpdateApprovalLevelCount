@@ -1,0 +1,20 @@
+(function executeRule(current, previous /*null when async*/ ) {
+    //Update Approvers count
+    if (current.operation() == "insert") { //handling insert in case approver table for a particular case.
+        var approval_level = "";
+        var approval_config = new GlideRecord("u_approval_configuration");
+        approval_config.addEncodedQuery("u_table=" + current.u_case.sys_class_name);
+        approval_config.query();
+        if (approval_config.next())
+            approval_level = approval_config.u_approval_layers;
+        if (approval_level == current.u_case.u_approvers_counter) {
+            current.setAbortAction(true);
+            gs.addErrorMessage("You have reached maximum number of approvals allowed for this case.")
+        } else                                               
+            new PP_CSM_Core_Utils().updateApproverCounter(current.u_case);
+    } else if (current.operation() == "delete") {                               //handling delete from case approvers table.
+        new PP_CSM_Core_Utils().handleCaseApproverDeletion(current);
+
+    }
+
+})(current, previous);

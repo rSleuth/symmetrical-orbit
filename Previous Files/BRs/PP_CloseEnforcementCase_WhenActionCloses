@@ -1,0 +1,14 @@
+(function executeRule(current, previous /*null when async*/ ) {
+    var checkIsFollowActionOpen = new sn_customerservice.PP_CSM_Enforcement_Utils().checkFollowAction(current.getUniqueValue());
+    if (checkIsFollowActionOpen) {
+        current.setAbortAction(true);
+        gs.addErrorMessage("System cannot close action as follow up action is not yet closed.");
+    } else {
+        var message = new sn_customerservice.PP_CSM_Enforcement_Utils().closeEnforcementCase(current.getUniqueValue(), current.getValue("u_enforcement_case"));
+        if (message)
+            gs.addInfoMessage("Case has been closed as there are no open actions.");
+   else
+   gs.addInfoMessage("Action has been closed.");
+    }
+
+})(current, previous);

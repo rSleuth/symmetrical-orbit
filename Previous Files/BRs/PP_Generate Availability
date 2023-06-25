@@ -1,0 +1,65 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    var user = '';
+    var department = '';
+    var utils = new PP_Global_Core_Utils();
+    var gdt = new GlideDateTime();
+    var date1 = gdt.getDate();
+    var date = utils.getDate(date1, " 01:00:00");
+    var dateEnd1 = utils.getDate(date1, " 10:00:00");
+    var days = new GlideDateTime(date);
+    var noofDays = parseInt(60);
+    noofDays = noofDays * 8;
+    var dur = new GlideDuration(60 * 60 * 1000 * noofDays);
+    var schedule = new GlideSchedule('08fcd0830a0a0b2600079f56b1adb9ae');
+    var endschedule = schedule.add(days, dur);
+    var endDate = utils.getDate(endschedule.getDate(), " 10:00:00");
+    var start = new GlideDateTime(date);
+    var end = new GlideDateTime(dateEnd1);
+    var dateEnd = new GlideDateTime(endDate);
+    while (start.compareTo(dateEnd) <= 0) {
+        var nextDate = utils.getDate(start, " 01:00:00");
+        var nextEndDate = utils.getDate(end, " 10:00:00");
+        var grpMember = new GlideRecord('sys_user_grmember');
+            var gcdt = new GlideDateTime(nextDate);
+            var day = gcdt.getDayOfWeekLocalTime();
+            user = current.sys_id;
+            department = current.department;
+            var agr = new GlideRecord('sn_customerservice_user_availability')
+            agr.addEncodedQuery("u_dateON" + start + "@javascript:gs.dateGenerate('" + start + "','start') @javascript:gs.dateGenerate('" + start + "','end')^u_user=" + user);
+            agr.query();
+            if (!agr.next()) {
+                var dgr = new GlideRecord('sn_customerservice_user_availability');
+                dgr.addEncodedQuery("u_dateON" + start + "@javascript:gs.dateGenerate('" + start + "','start') @javascript:gs.dateGenerate('" + start + "','end')^u_type=2^u_department=" + department);
+                dgr.query();
+                if (dgr.next()) {
+                    parent = dgr.sys_id;
+                } else if (day != 6 && day != 7) {
+                    dgr.initialize();
+                    dgr.u_department = department;
+                    dgr.u_date = nextDate;
+                    dgr.u_end_date = nextEndDate;
+                    dgr.u_type = 2;
+                    dgr.u_availability = '100%';
+                    dgr.u_display_name = department.id + ' - 100%';
+                    var parent = dgr.insert();
+                }
+                if (day != 6 && day != 7) {
+                    agr.initialize();
+                    agr.u_user = user;
+                    agr.u_date = nextDate;
+                    agr.u_end_date = nextEndDate;
+                    agr.u_type = 1;
+                    agr.u_department = department;
+                    agr.u_availability = '100%';
+                    agr.u_display_name = current.getDisplayValue() + ' - 100%';
+                    agr.u_parent = parent;
+                    agr.insert();
+                }
+            }
+        
+        start.addDaysUTC(1);
+        end.addDaysUTC(1);
+    }
+
+})(current, previous);

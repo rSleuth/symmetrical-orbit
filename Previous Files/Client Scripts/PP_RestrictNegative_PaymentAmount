@@ -1,0 +1,14 @@
+function onSubmit() {
+    //Type appropriate comment here, and begin script below
+    var payment_amount = g_form.getValue("u_payment_amount_tm").toString().split(";")[1];
+
+    if (payment_amount < 0) {
+        g_form.showFieldMsg("u_payment_amount_tm", "Payment amount cannot be a negative value.", "error")
+        return false;
+    }
+    var payment_received = g_form.getValue("u_payment_received_till_date_tm").toString().split(";")[1];
+    if (payment_received < 0) {
+        g_form.showFieldMsg("u_payment_received_till_date_tm", "Payment received cannot be a negative value.", "error")
+        return false;
+    }
+}

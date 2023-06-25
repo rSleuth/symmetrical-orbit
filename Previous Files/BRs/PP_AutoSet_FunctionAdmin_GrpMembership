@@ -1,0 +1,8 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    var calEventObj = new global.PP_Calendar_Event_Request_Utils();
+    //calEventObj.updateFuncAdminGrpMembership_Retired(current.getValue('u_function_admin'));
+ calEventObj.updateFuncAdminGrpMembership();
+
+
+})(current, previous);

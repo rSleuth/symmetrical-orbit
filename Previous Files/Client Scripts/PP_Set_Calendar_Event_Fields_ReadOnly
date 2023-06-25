@@ -1,0 +1,19 @@
+function onLoad() {
+
+    //var restrictedTypes = ['time_off', 'meeting', 'cover_duty_events', 'stop_file_for_new_cases', 'stop_file_for_entirely', 'pre_consultation', 'course', 'leave', 'others'];
+    //var type = g_form.getValue('type');
+
+    var url = g_scratchpad.calendarEventRequestUrl;
+    var message = 'ATTENTION! You are not allowed to create or update calendar events here. Please click ' + url + ' to submit a request to create/update an entry.';
+    g_form.addInfoMessage(message);
+
+    //if (restrictedTypes.indexOf(type) > -1 || type == '') {
+    //Set all form fields to read-only
+    var editableFields = g_form.getEditableFields();
+    for (var i = 0; i < editableFields.length; i++) {
+        g_form.setReadOnly(editableFields[i], true);
+        g_form.setReadOnly('type', true);
+    }
+    //}
+
+}

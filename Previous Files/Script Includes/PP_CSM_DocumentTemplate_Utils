@@ -1,0 +1,464 @@
+var PP_CSM_DocumentTemplate_Utils = Class.create();
+PP_CSM_DocumentTemplate_Utils.prototype = {
+    initialize: function() {
+        this.ENABLE_LOG = false;
+    },
+
+    logMessage: function(message) {
+        if (this.ENABLE_LOG) {
+            gs.info(message);
+        }
+        return "";
+    },
+
+    /* Method used for getAttachSignature - covers attachment reference to base64 image */
+    getImageUrlBase64: function(attachmentRecord) {
+        if (attachmentRecord) {
+            //var gsu = (typeof GlideStringUtil != 'undefined') ? (GlideStringUtil) : (Packages.com.glide.util.StringUtil); //few versions support the first one, other supports second
+            var gsa = (typeof GlideSysAttachment != 'undefined') ? (new GlideSysAttachment()) : (new Packages.com.glide.ui.SysAttachment());
+            var attachmentData = gsa.getContent(attachmentRecord);
+            var base64Img = gsa.getContentBase64(attachmentRecord);
+            var attachment = String(attachmentData); //String(Packages.java.lang.String(attachmentData));
+            var imageSize = (attachment.length * 3) / 4;
+            // image size <= 16Mb 
+            if (imageSize < (16 * 1024 * 1024)) return "<img width='215px' height='auto' src='data:image/png;base64," + base64Img + "' />";
+            else 'File size limit exceeded';
+        }
+        return '';
+    },
+
+    /* Method used for pp_getsignature document template - Get signature attachment, converts to base64 image and return */
+    getAttachSignature: function(targetRecord) {
+        var grAttachDoc = "";
+        var grPreviousSignatures = new GlideRecord("signature_image");
+        grPreviousSignatures.addQuery("document", targetRecord.u_select_signee.sys_id);
+        grPreviousSignatures.query();
+        if (grPreviousSignatures.next()) {
+            grAttachDoc = grPreviousSignatures.sys_id;
+        }
+        if (!gs.nil(grAttachDoc)) {
+            var grAttachment = new GlideRecord("sys_attachment");
+            grAttachment.addQuery("table_name", "signature_image");
+            grAttachment.addQuery("table_sys_id", grAttachDoc);
+            grAttachment.query();
+            if (grAttachment.next()) {
+                var mimeType = grAttachment.getValue("content_type");
+                if (mimeType.indexOf("image") == -1) return ''; // Not an image
+                var img = mimeType.indexOf('svg') > -1 ?
+                    'Does not support SVG' //getImgSVG(gr)
+                    :
+                    this.getImageUrlBase64(grAttachment);
+
+                return img;
+            }
+        }
+        return "";
+    },
+
+    /* Method used for pp_getmethodofdelivery document template - Get record checkbox details and return */
+    getMethodOfDelivery: function(targetRecord) {
+        var message = "By";
+        var messageArray = [];
+        if (targetRecord.u_by_hand) {
+            messageArray.push(" Hand");
+        }
+        if (targetRecord.u_email) {
+            messageArray.push(" Email");
+        }
+        if (targetRecord.u_registered_mail) {
+            messageArray.push(" Registered Mail");
+        }
+        if (targetRecord.u_ar_registered) {
+            messageArray.push(" AR Registered");
+        }
+        if (targetRecord.u_normal_mail) {
+            messageArray.push(" Normal Mail");
+        }
+        if (!gs.nil(messageArray.toString())) {
+
+            message = message + messageArray.toString();
+
+            return message;
+        }
+        return "";
+    },
+
+    /* Method used for pp_getaddressdetails document template - Get address details e.g. Block/Street/Floor/Unit then check empty for format and return */
+    getAddressDetails: function(targetRecord) {
+        var message = "";
+
+        if (!gs.nil(targetRecord.u_parent)) {
+            targetRecord = targetRecord.u_parent.getRefRecord();
+        }
+        if (!gs.nil(targetRecord.u_block_house_number) || !gs.nil(targetRecord.u_street_name)) {
+            message += targetRecord.u_block_house_number + " " + targetRecord.u_street_name;
+            message += "<br/>";
+        }
+        var arrayBuildFloor = [];
+        var addressMessage = "";
+        if (!gs.nil(targetRecord.u_building_name)) {
+            arrayBuildFloor.push(targetRecord.u_building_name);
+        }
+        //condition check for floor and unit details
+        if (!gs.nil(targetRecord.u_floor_number) && !gs.nil(targetRecord.u_unit_number)) {
+            addressMessage = " #" + targetRecord.u_floor_number + "-" + targetRecord.u_unit_number;
+
+        } else if (!gs.nil(targetRecord.u_floor_number)) {
+            addressMessage = " #" + targetRecord.u_floor_number;
+
+        } else if (!gs.nil(targetRecord.u_unit_number)) {
+            addressMessage = " " + targetRecord.u_unit_number;
+        }
+        arrayBuildFloor.push(addressMessage);
+        if (!gs.nil(arrayBuildFloor.toString())) {
+            message += arrayBuildFloor.toString();
+        }
+        //check for empty country and postal code
+        if (!gs.nil(targetRecord.u_country.getDisplayValue()) && !gs.nil(targetRecord.u_postal_code)) {
+            message += "<br/>";
+            message += targetRecord.u_country.getDisplayValue() + " " + targetRecord.u_postal_code;
+        }
+
+        return message;
+    },
+
+    /* Method used for pp_getplaceofincident document template - Get place of incident record via address type and return */
+    getPlaceOfIncidentDetails: function(targetRecord) {
+        var message = "";
+        var grAddress = new GlideRecord("sn_customerservice_address");
+        grAddress.addQuery("u_type", "2"); //place of incident type
+        grAddress.addQuery("u_enforcement_case", targetRecord.u_enforcement_case.sys_id);
+        grAddress.orderBy('sys_created_on');
+        grAddress.query();
+        if (grAddress.next()) {
+            message = grAddress.u_place_of_incident;
+        }
+        return message;
+    },
+
+    /* Method used for pp_getRelatedPartyInfo document template - Get related Party Info record via address type and return */
+    getRelatedPartyInfo: function(targetRecord) {
+        var message = "";
+        var grAddress = new GlideRecord("sn_customerservice_address");
+        grAddress.addQuery("u_type", "1"); //related party info
+        grAddress.addQuery("u_enforcement_case", targetRecord.u_enforcement_case.sys_id);
+        grAddress.orderBy('sys_created_on');
+        grAddress.query();
+        if (grAddress.next()) {
+            message = grAddress.u_related_party;
+        }
+        return message;
+    },
+
+    /* Method used for pp_getliftid document template - Get place of incident record via address type and return lift id*/
+    getLiftID: function(targetRecord) {
+        var message = "";
+        var grAddress = new GlideRecord("sn_customerservice_address");
+        grAddress.addQuery("u_type", "2"); //place of incident type
+        grAddress.addQuery("u_enforcement_case", targetRecord.u_enforcement_case.sys_id);
+        grAddress.query();
+        if (grAddress.next()) {
+            message = grAddress.u_lift_id;
+        }
+        return message;
+    },
+
+    /* Method used for pp_getliftnumber document template - Get place of incident record via address type and return lift number*/
+    getLiftNumber: function(targetRecord) {
+        var message = "";
+        var grAddress = new GlideRecord("sn_customerservice_address");
+        grAddress.addQuery("u_type", "2"); //place of incident type
+        grAddress.addQuery("u_enforcement_case", targetRecord.u_enforcement_case.sys_id);
+        grAddress.query();
+        if (grAddress.next()) {
+            message = grAddress.u_lift_no;
+        }
+        return message;
+    },
+
+    /* Method used for pp_getplaceofincident document template - Get place of incident record via address type and return */
+    getPlaceOfIncidentUpperCaseDetails: function(targetRecord) {
+        var message = "";
+        var grAddress = new GlideRecord("sn_customerservice_address");
+        grAddress.addQuery("u_type", "2"); //place of incident type
+        grAddress.addQuery("u_enforcement_case", targetRecord.u_enforcement_case.sys_id);
+        grAddress.orderBy('sys_created_on');
+        grAddress.query();
+        if (grAddress.next()) {
+            message = grAddress.u_place_of_incident.toUpperCase();
+        }
+        return message;
+    },
+
+    /* Method used for pp_getmultipleplaceofincident document template - Get list of place of incident record via address type and return */
+    getMultiplePlaceOfIncidentDetails: function(targetRecord) {
+        var message = "";
+        var grAddress = new GlideRecord("sn_customerservice_address");
+        grAddress.addQuery("u_type", "2"); //place of incident type
+        grAddress.addQuery("u_enforcement_case", targetRecord.u_enforcement_case.sys_id);
+        grAddress.query();
+        while (grAddress.next()) {
+            message += grAddress.u_place_of_incident;
+            message += "<br/>";
+        }
+        return message;
+    },
+
+    /* Method used for pp_getannexdescription document template - Get annex description with validating upload supporting document and return */
+    getAnnexDescription: function(targetRecord) {
+        var message = "";
+
+        if (!gs.nil(targetRecord.u_parent)) {
+            targetRecord = targetRecord.u_parent.getRefRecord();
+        }
+        if (!gs.nil(targetRecord.u_upload_supporting_document) && !gs.nil(targetRecord.u_annex_description_tm)) {
+            message = "Annex " + targetRecord.u_annex_description_tm;
+        }
+        return message;
+    },
+
+    /* Method used for pp_getcollectionbox document template - Create collection box only appear By Hand is checked and return */
+    getCollectionBox: function(targetRecord) {
+        var collectionTable = "";
+        if (targetRecord.u_by_hand) {
+            collectionTable += '<div style="page-break-inside: avoid;">';
+            collectionTable += '<table style="border-collapse: collapse; width: 34.4325%; height: 150px; border-color: #000000; border-style: solid;" border="1">';
+            collectionTable += '<tbody>';
+            collectionTable += '<tr>';
+            collectionTable += '<td style="width: 100%; vertical-align: top;">';
+            collectionTable += '<p style="margin: 0cm; font-size: 12pt; font-family: "Arial;"><span style="font-size: 12pt;"><u><span style="font-family: Arial;">Collected by:</span></u></span></p>';
+            collectionTable += '<p style="margin: 0cm; font-size: 12pt; font-family: "Arial;"><span style="font-family: Arial; font-size: 12pt;">&nbsp;</span></p>';
+            collectionTable += '<p style="margin: 0cm; font-size: 12pt; font-family: "Arial;"><span style="font-family: Arial; font-size: 12pt;">&nbsp;</span></p>';
+            collectionTable += '<p style="margin: 0cm; font-size: 12pt; font-family: "Arial;"><span style="font-family: Arial; font-size: 12pt;">Name:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ____________________</span></p>';
+            collectionTable += '<p style="margin: 0cm; font-size: 12pt; font-family: "Arial;"><span style="font-family: Arial; font-size: 12pt;">&nbsp;</span></p>';
+            collectionTable += '<p style="margin: 0cm; font-size: 12pt; font-family: "Arial;"><span style="font-family: Arial; font-size: 12pt;">&nbsp;</span></p>';
+            collectionTable += '<p style="margin: 0cm; font-size: 12pt; font-family: "Arial;"><span style="font-family: Arial; font-size: 12pt;">NRIC:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ____________________</span></p>';
+            collectionTable += '<p style="margin: 0cm; font-size: 12pt; font-family: "Arial;"><span style="font-family: Arial; font-size: 12pt;">&nbsp;</span></p>';
+            collectionTable += '<p style="margin: 0cm; font-size: 12pt; font-family: "Arial;"><span style="font-family: Arial; font-size: 12pt;">&nbsp;</span></p>';
+            collectionTable += '<p style="margin: 0cm; font-size: 12pt; font-family: "Arial;"><span style="font-family: Arial; font-size: 12pt;">Signature: ____________________</span></p>';
+            collectionTable += '</td>';
+            collectionTable += '</tr>';
+            collectionTable += '</tbody>';
+            collectionTable += '</table></div>';
+        }
+        return collectionTable;
+    },
+
+    /* Method used for pp_getrecipient document template - Get recipent via condition of type of action and return */
+    getRecipient: function(targetRecord) {
+        var message = "";
+
+        if (!gs.nil(targetRecord.u_parent)) {
+            targetRecord = targetRecord.u_parent.getRefRecord();
+        }
+        if (!gs.nil(targetRecord.u_type_of_action)) {
+            if (targetRecord.u_type_of_action.indexOf("enforcement_actions") > -1) {
+                if (!gs.nil(targetRecord.u_name_of_offender)) {
+                    message += targetRecord.u_name_of_offender;
+                }
+            } else if (targetRecord.u_type_of_action.indexOf("orders") > -1 || targetRecord.u_type_of_action.indexOf("notices") > -1 || targetRecord.u_type_of_action.indexOf("advisory") > -1) {
+                if (!gs.nil(targetRecord.u_name_of_recipient)) {
+                    message += targetRecord.u_name_of_recipient;
+                }
+            }
+            if (!gs.nil(message)) {
+                message += "<br/>";
+            }
+        }
+        return message;
+    },
+
+ /* Method used for pp_getrecipientcontent document template - Get recipent via condition of type of action and return */
+    getRecipientviaContent: function(targetRecord) {
+        var message = "";
+
+        if (!gs.nil(targetRecord.u_parent)) {
+            targetRecord = targetRecord.u_parent.getRefRecord();
+        }
+        if (!gs.nil(targetRecord.u_type_of_action)) {
+            if (targetRecord.u_type_of_action.indexOf("enforcement_actions") > -1) {
+                if (!gs.nil(targetRecord.u_name_of_offender)) {
+                    message += targetRecord.u_name_of_offender;
+                }
+            } else if (targetRecord.u_type_of_action.indexOf("orders") > -1 || targetRecord.u_type_of_action.indexOf("notices") > -1 || targetRecord.u_type_of_action.indexOf("advisory") > -1) {
+                if (!gs.nil(targetRecord.u_name_of_recipient)) {
+                    message += targetRecord.u_name_of_recipient;
+                }
+            }
+        }
+        return message;
+    },
+
+    /* Method used for pp_getccaddresscustomerdetails document template - Get cc details via address type and return */
+    getCCAddressCustomerDetails: function(targetRecord) {
+        var message = "";
+
+        var grCCAddress = new GlideRecord("sn_customerservice_address");
+        grCCAddress.addQuery("u_type", "3"); //CC type
+        grCCAddress.addQuery("u_enforcement_case", targetRecord.u_enforcement_case.sys_id);
+        grCCAddress.addQuery("u_parent", targetRecord.sys_id);
+        grCCAddress.query();
+        while (grCCAddress.next()) {
+            message += "<div style='page-break-inside: avoid;'>";
+            message += "CC:";
+            message += "<br/>";
+            message += grCCAddress.u_name_of_cc_person;
+            message += "<br/>";
+            // message += "Address:";
+            // message += "<br/>";
+            message += grCCAddress.u_block_house_number + " " + grCCAddress.street;
+            message += "<br/>";
+            var arrayBuildFloor = [];
+            var addressMessage = "";
+            if (!gs.nil(grCCAddress.u_building_name)) {
+                arrayBuildFloor.push(grCCAddress.u_building_name);
+            }
+            //condition check for floor and unit details
+            if (!gs.nil(grCCAddress.u_floor_number) && !gs.nil(grCCAddress.u_unit_number)) {
+                addressMessage = " #" + grCCAddress.u_floor_number + "-" + grCCAddress.u_unit_number;
+
+            } else if (!gs.nil(grCCAddress.u_floor_number)) {
+                addressMessage = " #" + grCCAddress.u_floor_number;
+
+            } else if (!gs.nil(grCCAddress.u_unit_number)) {
+                addressMessage = " " + grCCAddress.u_unit_number;
+            }
+            if (!gs.nil(addressMessage)) { //if there is address append to array
+                arrayBuildFloor.push(addressMessage);
+            }
+            message += arrayBuildFloor.toString();
+            //check for empty country and postal code
+            if (!gs.nil(grCCAddress.u_country.getDisplayValue()) && !gs.nil(grCCAddress.zip)) {
+                message += "<br/>";
+                message += grCCAddress.u_country.getDisplayValue() + " " + grCCAddress.zip;
+            }
+            message += "<br/>";
+            message += "</div>";
+            message += "<br/>";
+        }
+        return message;
+    },
+
+    /* Method used for pp_personnelincharge document template - Get personnel in charge details and return */
+    getPersonnelInCharge: function(targetRecord) {
+        if (!gs.nil(targetRecord.u_parent)) {
+            targetRecord = targetRecord.u_parent.getRefRecord();
+        }
+        if (!gs.nil(targetRecord.u_personnel_in_charge)) {
+            return "ATTN: " + targetRecord.u_personnel_in_charge;
+        }
+        return "";
+    },
+
+    /* Method used for pp_getdescnoncomplianceissue document template - Get first record and description of non-complaint clause and return */
+    getDescriptionOfNonComplianceIssue: function(targetRecord) {
+        if (!gs.nil(targetRecord.u_parent)) {
+            targetRecord = targetRecord.u_parent.getRefRecord();
+        }
+        if (!gs.nil(targetRecord.u_description_of_non_compliance_issue)) {
+            var grNonComplianceClause = new GlideRecord("sn_customerservice_non_compliant_clause");
+            grNonComplianceClause.addQuery("sys_id", "IN", targetRecord.u_description_of_non_compliance_issue);
+            grNonComplianceClause.query();
+            if (grNonComplianceClause.next()) {
+                return grNonComplianceClause.u_description_of_non_compliance_issue;
+            }
+        }
+        return "";
+    },
+
+    /* Method used for pp_getcorrespondingrelevact document template - Get first record and relevant act details of non-complaint clause and return */
+    getCorrespondingRelevantActReg: function(targetRecord) {
+        if (!gs.nil(targetRecord.u_parent)) {
+            targetRecord = targetRecord.u_parent.getRefRecord();
+        }
+        if (!gs.nil(targetRecord.u_description_of_non_compliance_issue)) {
+            var grNonComplianceClause = new GlideRecord("sn_customerservice_non_compliant_clause");
+            grNonComplianceClause.addQuery("sys_id", "IN", targetRecord.u_description_of_non_compliance_issue);
+            grNonComplianceClause.query();
+            if (grNonComplianceClause.next()) {
+                return grNonComplianceClause.u_corresponding_relevant_act_regs_and_section;
+            }
+        }
+        return "";
+    },
+
+    /* Method used for pp_getactregulationdetails document template - Get first record and non-complaint clause details and return */
+    getActRegulationDetails: function(targetRecord) {
+        var message = "";
+        var arrayMessage = [];
+        if (!gs.nil(targetRecord.u_description_of_non_compliance_issue)) {
+            var grNonComplianceClause = new GlideRecord("sn_customerservice_non_compliant_clause");
+            grNonComplianceClause.addQuery("sys_id", "IN", targetRecord.u_description_of_non_compliance_issue);
+            grNonComplianceClause.query();
+            if (grNonComplianceClause.next()) {
+                arrayMessage.push(grNonComplianceClause.u_act);
+                arrayMessage.push(grNonComplianceClause.u_name_of_regulation);
+
+                if (!gs.nil(arrayMessage.toString())) {
+                    message += arrayMessage.toString();
+                    message += "<br/>";
+                }
+                if (!gs.nil(grNonComplianceClause.u_description_of_relevant_act_regs_and_section)) {
+                    message += grNonComplianceClause.u_description_of_relevant_act_regs_and_section;
+                }
+            }
+        }
+        return message;
+    },
+
+    getActDetails: function(targetRecord) {
+        var message = "";
+        if (!gs.nil(targetRecord.u_description_of_non_compliance_issue)) {
+            var grNonComplianceClause = new GlideRecord("sn_customerservice_non_compliant_clause");
+            grNonComplianceClause.addQuery("sys_id", "IN", targetRecord.u_description_of_non_compliance_issue);
+            grNonComplianceClause.query();
+            if (grNonComplianceClause.next()) {
+                message = grNonComplianceClause.u_act;
+            }
+        }
+        return message;
+    },
+
+    getScheduleOfWorkAnnex: function(targetRecord) {
+        var tableMessage = "";
+        var valid = false;
+        var liftNo = this.getLiftNumber(targetRecord);
+        var liftID = this.getLiftID(targetRecord);
+        tableMessage += '<table style="border-collapse: collapse; width: 100%;" border="1">';
+        tableMessage += '<tbody>';
+        tableMessage += '<tr>';
+        tableMessage += '<td style="width: 100%; text-align: center;" colspan="3"><strong>SCHEDULE OF WORKS</strong></td>';
+        tableMessage += '</tr>';
+        tableMessage += '<tr>';
+        tableMessage += '<td style="width: 10%; text-align: center;"><strong>S/No.</strong></td>';
+        tableMessage += '<td style="width: 20%; text-align: center;"><strong>Lift</strong></td>';
+        tableMessage += '<td style="width: 70%; text-align: center;"><strong>Works Required</strong></td>';
+        tableMessage += '</tr>';
+        //create loop
+        for (var i = 1; i < 5; i++) {
+            var reqField = 'u_requred_action_' + i + '_tm';
+            var deadlineComp = 'u_deadline_of_compliance_' + i + '_tm';
+            if (!gs.nil(targetRecord[reqField])) {
+                valid = true;
+                tableMessage += '<tr>';
+                tableMessage += '<td style="width: 10%; text-align: center;"><div class="divText">&nbsp;</div>' + i + '</td>';
+                tableMessage += '<td style="width: 20%; text-align: center;"><div class="divText">&nbsp;</div>' + liftNo + '<br/>(' + liftID + ')</td>';
+                tableMessage += '<td style="width: 70%; text-align: left;"><div class="divText">&nbsp;</div>' + targetRecord[reqField] + '<br/><div class="divText">&nbsp;</div>';
+                tableMessage += 'The works shall be completed by ' + targetRecord[deadlineComp] + '.<div class="divText">&nbsp;</div></td>';
+                tableMessage += '</tr>';
+            }
+        }
+        if (!valid) {
+            tableMessage += '<tr>';
+            tableMessage += '<td style="width: 100%; text-align: center;" colspan="3">No records found</td>';
+            tableMessage += '</tr>';
+        }
+        //end loop
+        tableMessage += '</tbody>';
+        tableMessage += '</table>';
+
+        return tableMessage;
+    },
+
+    type: 'PP_CSM_DocumentTemplate_Utils'
+};

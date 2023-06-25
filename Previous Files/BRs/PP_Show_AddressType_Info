@@ -1,0 +1,9 @@
+(function executeRule(current, previous /*null when async*/) {
+
+ //gs.addInfoMessage(gs.action.getGlideURI());
+ 
+ gs.action.getGlideURI().toString().indexOf('Search String')
+ 
+ // Add your code here
+
+})(current, previous);

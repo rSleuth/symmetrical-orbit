@@ -1,0 +1,99 @@
+var mrvsFormatter = Class.create();
+mrvsFormatter.prototype = Object.extendsObject(AbstractAjaxProcessor, {
+
+    /*
+    Call this function like this--
+    var objFncs = new mrvsFormatter();
+    gs.print(objFncs.getMRVSFormated('7b750d0b1b232814be65c955624bcb40')); //ritm --> sys_id
+    */
+    getMRVSFormated: function(i_ritmSysId) {
+        var ritmSysId = i_ritmSysId,
+            mrvsSysIDes = '',
+            mrvsTable = '';
+
+        var grRITM = new GlideRecord("sc_req_item");
+        if (grRITM.get(ritmSysId)) {
+            mrvsSysIDes = grRITM.cat_item.u_multi_row_variable_set_in_email;
+            if (mrvsSysIDes != '') {
+                var grVarSet = new GlideRecord("item_option_new_set");
+                grVarSet.addQuery("sys_idIN" + mrvsSysIDes);
+                grVarSet.query();
+                while (grVarSet.next()) {
+                    var mrvsSysId = grVarSet.sys_id;
+                    var mrvsTitle = grVarSet.title;
+                    var mrvsInternalName = grVarSet.internal_name;
+                    mrvsTable = mrvsTable + "\n" + this.getFormatedTable(mrvsSysId, mrvsInternalName, mrvsTitle, i_ritmSysId);
+                }
+            }
+        }
+        return mrvsTable;
+    },
+
+    /*
+ Call this function like this--
+ var objFncs = new mrvsFormatter();
+ gs.print(objFncs.getFormatedTable('11e0039bdbc87700bc1a72fc0f9619bf', 'grp_owner_domain', '7b750d0b1b232814be65c955624bcb40'));
+ */
+    getFormatedTable: function(i_mrvsSysId, i_mrvsName, i_mrvsTitle, i_ritmSysId) {
+        var mrvsSysId = i_mrvsSysId,
+            ritmSysId = i_ritmSysId,
+            mrvsName = i_mrvsName,
+            mrvsTitle = i_mrvsTitle,
+            col = '',
+            colHeader = '';
+        Table = '<table style="width: 100%; border-collapse: collapse; border: 0.0pt; float: left; font-family: arial, sans-serif; font-size: 12px; line-height: 25px; color: #55565A; padding-left: 4px; padding-right: 4px; padding-top: 2px; padding-bottom: 2px; text-align: justify; vertical-align: top;" cellspacing="0" cellpadding="2">',
+            TH = [],
+            TR = '',
+            rowCount = 0,
+            totalColumn = 0;
+
+        var grMultiRow = new GlideRecord('item_option_new');
+        grMultiRow.addQuery('variable_set=' + mrvsSysId + '^active=true');
+        grMultiRow.orderBy('order');
+        grMultiRow.query();
+        while (grMultiRow.next()) {
+            var variableName = grMultiRow.question_text.toString();
+            if (col == '')
+                col = variableName;
+            else
+                col = col + ',' + variableName;
+        }
+        TH = col.split(',');
+        totalColumn = TH.length;
+
+        colHeader = colHeader + '<tr style="height: 25px; text-align: left;">';
+        for (var h = 0; h < totalColumn; h++) {
+            colHeader = colHeader + '<td style="font-weight:bold; border-collapse: collapse; border-style: solid; border: solid #AEAAAA 1.0pt;">' + TH[h].toString() + '</td>';
+        }
+        colHeader = colHeader + '</tr>';
+        var now_GR = new GlideRecord('sc_req_item');
+        if (now_GR.get(ritmSysId)) {
+            var mrvs = now_GR.variables[mrvsName]; //.grp_owner_domain;
+            //gs.print(mrvs);
+            rowCount = mrvs.getRowCount();
+            for (var i = 0; i < rowCount; i++) {
+                TR = TR + '<tr style="text-align: left; height: 25px;">';
+                var row = mrvs.getRow(i);
+                var cells = row.getCells();
+                for (var k = 0; k < cells.length; k++) {
+                    var cell = cells[k];
+                    //gs.info(cell.getLabel() + ":" + cell.getCellDisplayValue())
+                    var colVal = cell.getCellDisplayValue();
+                    TR = TR + '<td style="border-collapse: collapse; border-style: solid; border: solid #AEAAAA 1.0pt;">' + colVal + '</td>';
+                }
+                TR = TR + '</tr>';
+            }
+        }
+
+        if (rowCount > 0) {
+            Table = Table + '<tr><td colspan=' + totalColumn + ' style="font-weight:bold; border: 0px; text-decoration: underline;">\n\n' + mrvsTitle + '\n</td></tr>';
+            Table = Table + colHeader;
+            Table = Table + TR;
+            Table = Table + '</table>';
+        } else
+            Table = ''; //If there is no data in mrvs don't print
+        return Table;
+    },
+ 
+    type: 'mrvsFormatter'
+});

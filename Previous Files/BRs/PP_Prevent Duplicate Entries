@@ -1,0 +1,13 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    // Add your code here
+    var gr = new GlideRecord('sn_customerservice_m2m_sn_customers_sn_customers');
+    gr.addQuery('u_sn_customerservice_building_overview', current.u_sn_customerservice_building_overview);
+    gr.addQuery('u_sn_customerservice_project_overview', current.u_sn_customerservice_project_overview);
+    gr.query();
+    if (gr.next()) {
+        gs.addErrorMessage('Invalid request! Record already exists.');
+        current.setAbortAction(true);
+    }
+
+})(current, previous);

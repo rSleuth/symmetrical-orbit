@@ -1,0 +1,48 @@
+var PP_CustomerService_SecurityUtils = Class.create();
+PP_CustomerService_SecurityUtils.prototype = {
+    initialize: function() {},
+
+    checkUserPartOfGroup: function(grpSysId, userSysId) {
+        return this._checkUserPartOfGroup(grpSysId, userSysId);
+    },
+
+    /*
+       This Function verifies logged in user is part of group
+    */
+    _checkUserPartOfGroup: function(grpSysId, userSysId) {
+        var grpMem = new GlideRecord('sys_user_grmember');
+        grpMem.addQuery('user', userSysId);
+        grpMem.addQuery('group', grpSysId);
+        grpMem.query();
+        if (grpMem.next()) {
+            return true;
+        } else
+            return false;
+    },
+
+    /*   This Function verifies logged in user is part of enforcement case approvers
+     */
+    checkUserPartOfCaseApprovers: function(caseSysId, userSysId) {
+        return this._checkUserPartOfCaseApprovers(caseSysId, userSysId);
+    },
+
+    _checkUserPartOfCaseApprovers: function(caseSysId, userSysId) {
+
+        var caseapprovalList = [];
+        var caseApprovals = new GlideRecord('sn_customerservice_case_approvers');
+        caseApprovals.addQuery('u_case', caseSysId);
+        caseApprovals.query();
+        while (caseApprovals.next()) {
+            caseapprovalList.push(caseApprovals.u_approver.toString());
+        }
+        if (caseapprovalList.length != 0) {
+            if (caseapprovalList.toString().indexOf(userSysId) > -1) {
+                return true;
+            } else
+                return false;
+        }
+        return "";
+    },
+
+    type: 'PP_CustomerService_SecurityUtils'
+};

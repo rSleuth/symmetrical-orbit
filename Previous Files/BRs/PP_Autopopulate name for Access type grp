@@ -1,0 +1,20 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    // Add your code here
+    if (!gs.nil(previous.u_functions) || !gs.nil(previous.u_role)) {
+        current.name = current.u_functions.name + " - " + current.u_role.name + '';
+    }
+ else{
+    var gr = new GlideRecord("sys_user_group");
+    gr.addQuery("u_functions", current.u_functions);
+    gr.addQuery("u_role", current.u_role);
+    gr.query();
+    if (gr.next()) {
+        current.setAbortAction(true);
+        gs.addInfoMessage('Access group wit the same Function and Role already exists.')
+    } else {
+        current.name = current.u_functions.name + " - " + current.u_role.name + '';
+    }
+ }
+
+})(current, previous);

@@ -1,0 +1,37 @@
+(function executeRule(current, previous /*null when async*/) {
+var department = current.u_department;
+    var date1 = current.u_date;
+    var gdt = new GlideDateTime(date1);
+    gdt.addSeconds(28800);
+    var date = gdt.getValue();
+    var availability = 0;
+    var gr = new GlideRecord('sn_customerservice_user_availability');
+    gr.addEncodedQuery("u_dateON" + date + "@javascript:gs.dateGenerate('" + date + "','start') @javascript:gs.dateGenerate('" + date + "','end')^u_type=1^u_department=" + department);
+    gr.query();
+    while (gr.next()) {
+        availability = availability + parseFloat(gr.u_availability);
+    }
+    var grSysUser = new GlideRecord('sys_user');
+    grSysUser.addQuery('department', department);
+    grSysUser.query();
+    var memInDep = grSysUser.getRowCount();
+    var depAvailability = availability / memInDep;
+    var agr = new GlideRecord('sn_customerservice_user_availability');
+    agr.addEncodedQuery("u_dateON" + date + "@javascript:gs.dateGenerate('" + date + "','start') @javascript:gs.dateGenerate('" + date + "','end')^u_type=2^u_department=" + department);
+    agr.query();
+    if (agr.next()) {
+        agr.u_availability = parseFloat(depAvailability.toFixed(2)).toString() + '%';
+  agr.u_display_name = department.id + " - " + parseFloat(depAvailability.toFixed(2)).toString() + '%';
+        agr.update();
+    } else {
+        agr.initialize();
+        agr.u_department = department;
+        agr.u_date = date;
+        agr.u_type = 2;
+        agr.u_availability = parseFloat(depAvailability.toFixed(2)).toString() + '%';
+        agr.u_display_name = department.id + " - " + parseFloat(availability.toFixed(2)).toString() + '%';
+        agr.insert();
+
+    }
+
+})(current, previous);

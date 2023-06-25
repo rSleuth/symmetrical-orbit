@@ -1,0 +1,49 @@
+function onChange(control, oldValue, newValue, isLoading, isTemplate) {
+    if (isLoading) {
+        return;
+    }
+
+    var fieldArr = ['u_approver_users', 'u_approver_groups', 'u_table_name', 'u_approver_field', 'u_advanced_script'];
+    var hideFieldArr = [];
+
+    for (var i = 0; i < fieldArr.length; i++) {
+        g_form.setMandatory(fieldArr[i], false);
+        if (fieldArr[i] != 'u_table_name') {
+            g_form.clearValue(fieldArr[i]);
+
+        }
+        g_form.setDisplay(fieldArr[i], false);
+
+    }
+
+    if (newValue == 'users') {
+        g_form.setDisplay('u_approver_users', true);
+        g_form.setMandatory('u_approver_users', true);
+        hideFieldArr = ['u_approver_groups', 'u_table_name', 'u_approver_field', 'u_advanced_script'];
+
+    } else if (newValue == 'groups') {
+        g_form.setDisplay('u_approver_groups', true);
+        g_form.setMandatory('u_approver_groups', true);
+        hideFieldArr = ['u_approver_users', 'u_table_name', 'u_approver_field', 'u_advanced_script'];
+
+    } else if (newValue == 'field') {
+        g_form.setDisplay('u_table_name', true);
+        g_form.setDisplay('u_approver_field', true);
+        g_form.setMandatory('u_approver_field', true);
+        hideFieldArr = ['u_approver_users', 'u_approver_groups', 'u_advanced_script'];
+
+    } else if (newValue == 'advanced') {
+        g_form.setDisplay('u_advanced_script', true);
+        g_form.setMandatory('u_advanced_script', true);
+        hideFieldArr = ['u_approver_users', 'u_approver_groups', 'u_table_name', 'u_approver_field'];
+
+    } else {
+        hideFieldArr = ['u_approver_users', 'u_approver_groups', 'u_table_name', 'u_approver_field', 'u_advanced_script'];
+    }
+
+    for (var j = 0; j < hideFieldArr.length; j++) {
+        g_form.setDisplay(hideFieldArr[j], false);
+  g_form.setMandatory(hideFieldArr[j], false);
+    }
+
+}

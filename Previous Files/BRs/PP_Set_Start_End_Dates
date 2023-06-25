@@ -1,0 +1,9 @@
+(function executeRule(current, previous /*null when async*/ ) {
+
+    var gdtStart = new GlideDateTime(current.start_date_time.getDisplayValue());
+    current.u_start_date_time = gdtStart.getValue();
+
+    var gdtEnd = new GlideDateTime(current.end_date_time.getDisplayValue());
+    current.u_end_date_time = gdtEnd.getValue();
+
+})(current, previous);
